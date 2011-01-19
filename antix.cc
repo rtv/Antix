@@ -22,7 +22,6 @@ double Robot::range( 0.1 );
 double Robot::fov(  dtor(270.0) );
 std::vector<Robot*> Robot::population;
 unsigned int Robot::population_size( 100 );
-unsigned int Robot::pixel_count( 8);
 unsigned int Robot::sleep_msec( 50 );
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
@@ -30,6 +29,9 @@ bool Robot::paused( false );
 int Robot::winsize( 600 );
 int Robot::displaylist(0);
 bool Robot::show_data( true );
+std::vector<Robot::Puck> Robot::pucks;
+unsigned int Robot::home_count(6);
+std::set<Home*> Robot::homes;
 
 char usage[] = "Universe understands these command line arguments:\n"
  "  -? : Prints this helpful message.\n"
@@ -82,20 +84,66 @@ void Robot::DrawAll()
 {
 	FOR_EACH( r, population )
 		(*r)->Draw();
+	
+	FOR_EACH( h, homes )
+		{
+			Home* hp = *h;
+			glColor3f( hp->color.r, 
+								 hp->color.g,
+								 hp->color.b );
+			
+			glBegin(GL_LINE_LOOP);
+			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
+				glVertex2f( hp->x + sin(a) * hp->r, 
+										hp->y + cos(a) * hp->r );
+			glEnd();
+
+			glBegin(GL_LINE_LOOP);
+			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
+				glVertex2f( hp->x+worldsize + sin(a) * hp->r, 
+										hp->y + cos(a) * hp->r );
+			glEnd();
+
+			glBegin(GL_LINE_LOOP);
+			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
+				glVertex2f( hp->x-worldsize + sin(a) * hp->r, 
+										hp->y + cos(a) * hp->r );
+			glEnd();
+
+			glBegin(GL_LINE_LOOP);
+			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
+				glVertex2f( hp->x + sin(a) * hp->r, 
+										hp->y + worldsize + cos(a) * hp->r );
+			glEnd();
+
+			glBegin(GL_LINE_LOOP);
+			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
+				glVertex2f( hp->x + sin(a) * hp->r, 
+										hp->y - worldsize + cos(a) * hp->r );
+			glEnd();
+
+
+		}
+	
+	glColor3f( 1,1,1 ); // green
+	glBegin( GL_POINTS );
+	FOR_EACH( p, pucks )
+		glVertex2f( p->x, p->y );
+	glEnd();
 }
 
 #endif // GRAPHICS
 
-Robot::Robot( const Pose& pose, 
-				  const Color& color )
-  : pose(pose),
-	 speed(),
-	 color(color),
-	 pixels()
+Robot::Robot( Home* home,
+							const Pose& pose )
+  : home(home),
+	  pose(pose),
+		speed(),
+		see_robots(),
+		see_pucks()
 {
   // add myself to the static vector of all robots
   population.push_back( this );
-  pixels.resize( pixel_count );
 }
 
 void Robot::Init( int argc, char** argv )
@@ -105,9 +153,18 @@ void Robot::Init( int argc, char** argv )
 	
   // parse arguments to configure Robot static members
 	int c;
-	while( ( c = getopt( argc, argv, "?dp:s:f:r:c:u:z:w:")) != -1 )
+	while( ( c = getopt( argc, argv, "?da:p:s:f:r:c:u:z:w:")) != -1 )
 		switch( c )
 			{
+			case 'a':
+				{
+					int puck_count = atoi( optarg );
+					printf( "[Uni] puck count: %d\n", puck_count );
+					for( int i=0; i<puck_count; i++ )
+						pucks.push_back( Puck() );
+				}
+				break;
+
 			case 'p': 
 				population_size = atoi( optarg );
 				printf( "[Uni] population_size: %d\n", population_size );
@@ -127,12 +184,7 @@ void Robot::Init( int argc, char** argv )
 				range = atof( optarg );
 				printf( "[Uni] range: %.2f\n", range );
 				break;
-				
-			case 'c':
-				pixel_count = atoi( optarg );
-				printf( "[Uni] pixel_count: %d\n", pixel_count );
-				break;
-				
+								
       case 'u':
 				updates_max = atol( optarg );
 				printf( "[Uni] updates_max: %lu\n", (long unsigned)updates_max );
@@ -196,7 +248,6 @@ void Robot::Init( int argc, char** argv )
 
   glBegin( GL_POLYGON );
   glVertex2f( h/2.0, 0 );
-  glColor3f( 0,0,0 ); // black
   glVertex2f( -h/2.0,  w/2.0 );
   glVertex2f( -h/2.0, -w/2.0 );
   glEnd();
@@ -205,19 +256,13 @@ void Robot::Init( int argc, char** argv )
 #endif // GRAPHICS
 }
 
-void Robot::UpdatePixels()
+void Robot::UpdateSensors()
 {
-  double radians_per_pixel = fov / (double)pixel_count;
-  
   double halfworld = worldsize * 0.5;
 
-  // initialize pixels vector  
-  FOR_EACH( it, pixels )
-	 {
-		it->range = Robot::range; // maximum range
-      it->robot = NULL; // nothing detected
-    }
-  
+	see_robots.clear();
+	see_pucks.clear();
+
   // check every robot in the world to see if it is detected
   FOR_EACH( it, population )
     {
@@ -243,7 +288,7 @@ void Robot::UpdatePixels()
 		
       double dy = other->pose.y - pose.y;
 
-		// wrap around torus
+ 		// wrap around torus
 		if( dy > halfworld )
 		  dy -= worldsize;
 		else if( dy < -halfworld )
@@ -261,22 +306,12 @@ void Robot::UpdatePixels()
       double relative_heading = AngleNormalize((absolute_heading - pose.a) );
       if( fabs(relative_heading) > fov/2.0   ) 
 				continue; 
-			
-      // find which pixel it falls in 
-      int pixel = floor( relative_heading / radians_per_pixel );
-      pixel += pixel_count / 2;
-      pixel %= pixel_count;
 
-      assert( pixel >= 0 );
-      assert( pixel < (int)pixel_count );
-
-      // discard if we've seen something closer in this pixel already.
-      if( pixels[pixel].range < range) 
-		  continue;
-		
-      // if we made it here, we see this other robot in this pixel.
-      pixels[pixel].range = range;
-      pixels[pixel].robot = other;
+			see_robots.push_back( SeeRobot( other->pose, 
+																			other->speed, 
+																			range, 
+																			relative_heading,
+																			false ) );			
     }	
 }
 
@@ -304,7 +339,7 @@ void Robot::UpdateAll()
 				(*r)->UpdatePose();
 
 			FOR_EACH( r, population )
-				(*r)->UpdatePixels();
+				(*r)->UpdateSensors();
 
 			FOR_EACH( r, population )
 				(*r)->Controller();
@@ -322,38 +357,35 @@ void Robot::Draw()
 {
 #if GRAPHICS
   glPushMatrix();
+
+	// shift into this robot's local coordinate frame
   glTranslatef( pose.x, pose.y, 0 );
   glRotatef( rtod(pose.a), 0,0,1 );
   
-	glColor3f( color.r, color.g, color.b ); 
+	glColor3f( home->color.r, home->color.g, home->color.b ); 
 
 	// draw the pre-compiled triangle for a body
   glCallList(displaylist);
   
   if( Robot::show_data )
-	 {
-		// render the sensors
-		double rads_per_pixel = fov / (double)pixel_count;
-		glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-		
-		for( unsigned int p=0; p<pixel_count; p++ )
-		  {
-				double angle = -fov/2.0 + (p+0.5) * rads_per_pixel;
-				double dx1 = pixels[p].range * cos(angle+rads_per_pixel/2.0);
-				double dy1 = pixels[p].range * sin(angle+rads_per_pixel/2.0);
-				double dx2 = pixels[p].range * cos(angle-rads_per_pixel/2.0);
-				double dy2 = pixels[p].range * sin(angle-rads_per_pixel/2.0);
-				
-				glColor4f( 1,0,0, pixels[p].robot ? 0.2 : 0.05 );
-				
-				glBegin( GL_POLYGON );
-				glVertex2f( 0,0 );
-				glVertex2f( dx1, dy1 );
-				glVertex2f( dx2, dy2 );
-				glEnd();                  
-		  }	  
+		{
+			glColor3f( 1,0,0 ); // red
+			
+			for( std::vector<SeeRobot>::const_iterator it = see_robots.begin();
+					 it != see_robots.end();
+					 ++it )
+				{
+					float dx = it->range * cos(it->bearing);
+					float dy = it->range * sin(it->bearing);
+					
+					glBegin( GL_LINES );
+					glVertex2f( 0,0 );
+					glVertex2f( dx, dy );
+					glEnd();
+				}
 	 }
-
+	
+	// shift out of local coordinate frame
   glPopMatrix();
 #endif // GRAPHICS
 }
