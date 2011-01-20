@@ -27,11 +27,14 @@ uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 bool Robot::paused( false );
 int Robot::winsize( 600 );
-int Robot::displaylist(0);
+//int Robot::displaylist(0);
 bool Robot::show_data( true );
 std::vector<Robot::Puck> Robot::pucks;
-unsigned int Robot::home_count(6);
+unsigned int Robot::home_count(3);
 std::set<Home*> Robot::homes;
+double Robot::radius(0.01);
+unsigned int Robot::puck_count(100);
+double Robot::pickup_range( Robot::range/5.0 );
 
 char usage[] = "Universe understands these command line arguments:\n"
  "  -? : Prints this helpful message.\n"
@@ -63,6 +66,7 @@ static void timer_func( int dummy )
 // draw the world - this is called whenever the window needs redrawn
 static void display_func( void ) 
 {  
+  Robot::winsize = glutGet( GLUT_WINDOW_WIDTH );
   glClear( GL_COLOR_BUFFER_BIT );  
   Robot::DrawAll();
   glutSwapBuffers();
@@ -140,7 +144,8 @@ Robot::Robot( Home* home,
 	  pose(pose),
 		speed(),
 		see_robots(),
-		see_pucks()
+	 see_pucks(),
+	 puck_held(NULL)
 {
   // add myself to the static vector of all robots
   population.push_back( this );
@@ -157,14 +162,10 @@ void Robot::Init( int argc, char** argv )
 		switch( c )
 			{
 			case 'a':
-				{
-					int puck_count = atoi( optarg );
-					printf( "[Uni] puck count: %d\n", puck_count );
-					for( int i=0; i<puck_count; i++ )
-						pucks.push_back( Puck() );
-				}
-				break;
-
+			  puck_count = atoi( optarg );
+			  printf( "[Uni] puck count: %d\n", puck_count );
+			  break;
+			  
 			case 'p': 
 				population_size = atoi( optarg );
 				printf( "[Uni] population_size: %d\n", population_size );
@@ -215,13 +216,19 @@ void Robot::Init( int argc, char** argv )
 				exit(-1); // error
 			}
 	
+	for( unsigned int i=0; i<puck_count; i++ )
+	  pucks.push_back( Puck() );	
+	
 #if GRAPHICS
   // initialize opengl graphics
   glutInit( &argc, argv );
   glutInitWindowSize( winsize, winsize );
   glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA );
   glutCreateWindow( PROGNAME );
-  glClearColor( 0.8,0.8,1.0,1.0 );
+  //glClearColor( 0.8,0.8,1.0,1.0 ); // pale blue
+  // glClearColor( 0,0,0,1 ); // black
+  //glClearColor( 0.2,0,0,1 ); // dark red
+  glClearColor( 0.25,0.25,0.25,1 ); // dark grey
   glutDisplayFunc( display_func );
   glutTimerFunc( 50, timer_func, 0 );
   glutMouseFunc( mouse_func );
@@ -235,34 +242,34 @@ void Robot::Init( int argc, char** argv )
   glLoadIdentity();
   glScalef( 1.0/Robot::worldsize, 1.0/Robot::worldsize, 1 ); 
   
-  // define a display list for a robot body
-  double h = 0.01;
-  double w = 0.01;
+//   // define a display list for a robot body
+//   double h = 0.01;
+//   double w = 0.01;
 
 	glPointSize( 4.0 );
 
-  displaylist = glGenLists(1);
-  glNewList( displaylist, GL_COMPILE );
+//   displaylist = glGenLists(1);
+//   glNewList( displaylist, GL_COMPILE );
 
-  glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
+//   glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 
-  glBegin( GL_POLYGON );
-  glVertex2f( h/2.0, 0 );
-  glVertex2f( -h/2.0,  w/2.0 );
-  glVertex2f( -h/2.0, -w/2.0 );
-  glEnd();
+//   glBegin( GL_POLYGON );
+//   glVertex2f( h/2.0, 0 );
+//   glVertex2f( -h/2.0,  w/2.0 );
+//   glVertex2f( -h/2.0, -w/2.0 );
+//   glEnd();
 
-  glEndList();
+//   glEndList();
+
 #endif // GRAPHICS
 }
 
 void Robot::UpdateSensors()
 {
-  double halfworld = worldsize * 0.5;
-
-	see_robots.clear();
-	see_pucks.clear();
-
+  see_robots.clear();
+  see_pucks.clear();
+  
+  // first fill the robot sensor
   // check every robot in the world to see if it is detected
   FOR_EACH( it, population )
     {
@@ -270,49 +277,100 @@ void Robot::UpdateSensors()
       
       // discard if it's the same robot
       if( other == this )
-				continue;
-			
+		  continue;
+		
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 		
-      double dx = other->pose.x - pose.x;
-
-		// wrap around torus
-		if( dx > halfworld )
-		  dx -= worldsize;
-		else if( dx < -halfworld )
-		  dx += worldsize;
-		
+      double dx( WrapDistance( other->pose.x - pose.x ) );
 		if( fabs(dx) > Robot::range )
 		  continue; // out of range
 		
-      double dy = other->pose.y - pose.y;
-
- 		// wrap around torus
-		if( dy > halfworld )
-		  dy -= worldsize;
-		else if( dy < -halfworld )
-		  dy += worldsize;
-
+      double dy( WrapDistance( other->pose.y - pose.y ) );		
 		if( fabs(dy) > Robot::range )
 		  continue; // out of range
 		
       double range = hypot( dx, dy );
       if( range > Robot::range ) 
 				continue; 
-			
+		
       // discard if it's out of field of view 
       double absolute_heading = atan2( dy, dx );
       double relative_heading = AngleNormalize((absolute_heading - pose.a) );
       if( fabs(relative_heading) > fov/2.0   ) 
-				continue; 
-
-			see_robots.push_back( SeeRobot( other->pose, 
-																			other->speed, 
-																			range, 
-																			relative_heading,
-																			false ) );			
+		  continue; 
+		
+		see_robots.push_back( SeeRobot( other->home,
+												  other->pose, 
+												  other->speed, 
+												  range, 
+												  relative_heading,
+												  false ) );			
     }	
+
+  // next fill the puck sensor
+  // check every puck in the world to see if it is detected
+  FOR_EACH( it, pucks )
+    {      
+      // discard if it's out of range. We put off computing the
+      // hypotenuse as long as we can, as it's relatively expensive.
+		
+      double dx( WrapDistance( it->x - pose.x ) );
+		if( fabs(dx) > Robot::range )
+		  continue; // out of range
+		
+      double dy( WrapDistance( it->y - pose.y ) );		
+		if( fabs(dy) > Robot::range )
+		  continue; // out of range
+		
+      double range = hypot( dx, dy );
+      if( range > Robot::range ) 
+		  continue; 
+		
+      // discard if it's out of field of view 
+      double absolute_heading = atan2( dy, dx );
+      double relative_heading = AngleNormalize((absolute_heading - pose.a) );
+      if( fabs(relative_heading) > fov/2.0   ) 
+		  continue; 
+		
+		see_pucks.push_back( SeePuck( &(*it), range, 
+												relative_heading ));
+	 }		
+}
+
+bool Robot::Pickup()
+{
+  
+  if( ! puck_held ) 
+	 FOR_EACH( it, see_pucks )
+		{
+		  //printf( "see some pucks\n" );
+		  //if( (it->range < pickup_range) && !it->puck->held)
+		  if( (it->range < pickup_range) ) //&& !it->puck->held)
+			 {				
+				puck_held = it->puck;
+				puck_held->held = true;
+				return true;
+			 }		  		  
+		}
+
+  return false; // already holding or nothing close enough
+}
+
+bool Robot::Holding()
+{
+  return (bool)puck_held;
+}
+
+bool Robot::Drop()
+{
+  if( puck_held )
+	 {
+		puck_held->held = false;
+		puck_held = NULL;		
+		return true; // dropped successfully
+	 }
+  return false; // nothing to drop  
 }
 
 void Robot::UpdatePose()
@@ -325,6 +383,13 @@ void Robot::UpdatePose()
   pose.x = DistanceNormalize( pose.x + dx );
   pose.y = DistanceNormalize( pose.y + dy );
   pose.a = AngleNormalize( pose.a + da );
+
+  // if we're carrying a puck, update it's position
+  if( puck_held )
+	 {
+		puck_held->x = pose.x;
+		puck_held->y = pose.y;
+	 }
 }
 
 void Robot::UpdateAll()
@@ -363,26 +428,83 @@ void Robot::Draw()
   glRotatef( rtod(pose.a), 0,0,1 );
   
 	glColor3f( home->color.r, home->color.g, home->color.b ); 
+	
+	double radius = Robot::radius;
+	
+	// if robots are smaller than 4 pixels across, draw them as points
+	if( (radius * (double)winsize/(double)worldsize) < 2.0 )
+	  {
+		 glBegin( GL_POINTS );
+		 glVertex2f( 0,0 );
+		 glEnd();
+	  }
+	else
+	  {
+		 // draw a circular body
+		 glBegin(GL_LINE_LOOP);
+		 for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
+			glVertex2f( sin(a) * radius, 
+							cos(a) * radius );
+		 glEnd();
+		 
+		 // draw a nose indicating forward direction
+		 glBegin(GL_LINES);
+		 glVertex2f( 0, 0 );
+		 glVertex2f( Robot::radius, 0 );
+		 glEnd();
+	  }
 
-	// draw the pre-compiled triangle for a body
-  glCallList(displaylist);
-  
   if( Robot::show_data )
-		{
-			glColor3f( 1,0,0 ); // red
-			
-			for( std::vector<SeeRobot>::const_iterator it = see_robots.begin();
-					 it != see_robots.end();
-					 ++it )
-				{
-					float dx = it->range * cos(it->bearing);
-					float dy = it->range * sin(it->bearing);
-					
-					glBegin( GL_LINES );
-					glVertex2f( 0,0 );
-					glVertex2f( dx, dy );
-					glEnd();
-				}
+	 {
+		glColor3f( 1,0,0 ); // red
+		
+		for( std::vector<SeeRobot>::const_iterator it = see_robots.begin();
+			  it != see_robots.end();
+			  ++it )
+		  {
+			 float dx = it->range * cos(it->bearing);
+			 float dy = it->range * sin(it->bearing);
+			 
+			 glBegin( GL_LINES );
+			 glVertex2f( 0,0 );
+			 glVertex2f( dx, dy );
+			 glEnd();
+		  }
+
+		glColor3f( 0.5,1,0.5 ); // light green
+		
+		for( std::vector<SeePuck>::const_iterator it = see_pucks.begin();
+			  it != see_pucks.end();
+			  ++it )
+		  {
+			 float dx = it->range * cos(it->bearing);
+			 float dy = it->range * sin(it->bearing);
+			 
+			 glBegin( GL_LINES );
+			 glVertex2f( 0,0 );
+			 glVertex2f( dx, dy );
+			 glEnd();
+		  }
+
+		
+		glColor3f( 0.5,0.5,0.5 ); // grey
+
+		// draw the sensor FOV
+		glBegin(GL_LINE_LOOP);
+		
+		glVertex2f( 0, 0 );
+		
+		double right = -fov/2.0;
+		double left = +fov/2.0;// + M_PI;
+		double incr = fov/32.0;
+		for( float a=right; a<left; a+=incr)
+		  glVertex2f( cos(a) * range, 
+						  sin(a) * range );
+
+		glVertex2f( cos(left) * range, 
+						sin(left) * range );
+		
+		glEnd();		
 	 }
 	
 	// shift out of local coordinate frame
@@ -399,6 +521,19 @@ void Robot::Run()
   while( 1 )
     UpdateAll();
 #endif
+}
+
+// wrap around torus
+double Robot::WrapDistance( double d )
+{
+  const double halfworld( worldsize * 0.5 );
+  
+  if( d > halfworld )
+	 d -= worldsize;
+  else if( d < -halfworld )
+	 d += worldsize;
+
+  return d;
 }
 
 /** Normalize a length to within 0 to worldsize. */

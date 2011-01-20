@@ -4,8 +4,15 @@
 		Copyright Richard Vaughan, 2009.09.09
 ****/
 
+#include <math.h>
 #include "antix.h"
 using namespace Uni;
+
+/** returns +1 if the argument is positive, -1 if negative, for any type */
+template <typename T> int sgn(T val)
+{
+    return (val > T(0)) - (val < T(0));
+}
 
 Home::Color colors[] = { Home::Color(1,0,0), 
 												 Home::Color(0,0.5,0), // darker green 
@@ -22,102 +29,125 @@ class Swarmer : public Robot
 {
 public:
   
-  static bool invert;
+  double lastx, lasty;  
+  //  double goalx, goaly;
   
-  Swarmer( Home* h ) : Robot( h, Pose::Random() )
+  Swarmer( Home* h ) 
+	 : Robot( h, Pose::Random() ), 
+		lastx(home->x), // initial search location is close to my home
+		lasty(home->y)
+		//	returning(true);
   {}
   
   // must implement this method. Examine the pixels vector and set the
   // speed sensibly.
   virtual void Controller()
   {
-	 speed.v = 0.005;   // constant forward speed 
-	 speed.w = 0.0;     // no turning. we may change this below
-	 
-	 double halfworld = Robot::worldsize * 0.5;
-	 
-	 double dx = home->x - pose.x;
-	 
-	 // wrap around torus
-	 if( dx > halfworld )
-		 dx -= worldsize;
-	 else if( dx < -halfworld )
-		 dx += worldsize;
-	 
-	 double dy = home->y - pose.y;
-	 
-		// wrap around torus
-		if( dy > halfworld )
-		  dy -= worldsize;
-		else if( dy < -halfworld )
-		  dy += worldsize;
 
-	 double angle_home = atan2( dy, dx );
-	 if( normalize( pose.a - angle_home ) < 0 )
-		 speed.w = 0.05;
+	 double heading_error(0.0);
+	 
+	 // distance and angle to home
+	 double dx( WrapDistance( home->x - pose.x ));	 	 
+	 double dy( WrapDistance( home->y - pose.y ));		  
+	 double da( atan2( dy, dx ));
+	 double dist( hypot( dx, dy ));
+	 
+	 if( Holding() )
+		{ // drive home		  
+		  // turn towards home		  
+		  heading_error = AngleNormalize( da - pose.a );// < 0  ? 0.05 : -0.05;
+		  
+		  // if we're well inside the home radius
+		  if( dist < home->r/2.0 )
+			 Drop(); // release the puck (implies we won't be holding
+		  // next time round)
+		}
+	 else // not holding
+		{
+		  // if I see any pucks and I'm away from home
+		  if( see_pucks.size() > 0 && dist > home->r )
+			 {
+				// find the angle to the closest puck
+				double closest_range(1e9); //BIG				
+				FOR_EACH( it, see_pucks )
+				  {
+					 if( it->range < closest_range )						 
+						{
+						  heading_error = it->bearing;
+						  closest_range = it->range; // remember the closest range so far
+						}
+				  }
+				
+				// and attempt to pick something up
+				if( Pickup() )
+				  {
+					 // got one! remember where it was
+					 lastx = pose.x;
+					 lasty = pose.y;
+				  }
+			 }
+		  else
+			 {
+				double lx( WrapDistance( lastx - pose.x ));	 	 
+				double ly( WrapDistance( lasty - pose.y ));		  
+				
+				// go towards the last place I picked up a puck
+				heading_error = AngleNormalize( atan2(ly, lx) - pose.a );
+				
+				// if I've arrived at the last place and not yet found a
+				// puck, choose another place 
+				if( hypot( lx,ly ) < 0.05 )
+				  {
+					 lastx += drand48() * 0.2 - 0.1;
+					 lasty += drand48() * 0.2 - 0.1;
+				  }
+			 }
+		}
+
+	 // if I'm pointing in about the right direction
+	 if( fabs( heading_error ) < 0.1 )
+		{
+		  speed.v = 0.005; // drive fast
+		  speed.w = 0.0; // don't turn
+		}
 	 else
-		 speed.w = -0.05;
-
-
-	 if( hypot( dx, dy ) < home->r )
-		 speed.v = 0.002;
-
-	 return;
-
-	 // steer away from the closest roboot
-	 double dist = Robot::range; // max sensor range
-	 double bearing = 0.0;
+		{
+		  speed.v = 0.001; // drive slowly
+		  speed.w = 0.2 * (heading_error); // turn to reduce the error
+		}
 	 
-	 for( std::vector<SeeRobot>::const_iterator it = see_robots.begin();
-				it != see_robots.end();
-				++it )
-		 {
-			 if( it->range < dist )
-				 {
-					 dist = it->range;
-					 bearing =it->bearing;
-					 
-					 speed.w = (bearing < 0.0) ? 0.03 : -0.03;
-					 
-					 if( invert )
-						 speed.w *= -1.0; // invert turn direction
-				 }		 
-		 }
-	}
-};
+	 // steer away from nearby robots of other teams
+//  	 for( std::vector<SeeRobot>::const_iterator it = see_robots.begin();
+//  			it != see_robots.end();
+//  			++it )
+//  		{
+// 		  if( it->home != home )
+// 			 speed.w += 0.2 * -sgn(it->bearing);				
+//  		}
 
-// static members
-bool Swarmer::invert( false );
+  }
+};
 
 int main( int argc, char* argv[] )
 {
-	// configure global robot settings
-	Robot::Init( argc, argv );
+  // configure global robot settings
+  Robot::Init( argc, argv );
 	
-  // parse remaining cmdline arguments to configure swarmer
-	int c;
-	while( ( c = getopt( argc, argv, "i")) != -1 )
-	 	switch( c )
-	 		{
-	 		case 'i': Swarmer::invert = true;
-	 			break;				
-			}
-	
-	for( unsigned int i=0; i<Robot::home_count; i++ )
-		{
-			Home* h = new Home( i < color_count ? colors[i] : Home::Color::Random(), 
-													drand48(),
-													drand48(),													
-													Robot::worldsize / 10.0 );
-			
-			Robot::homes.insert(h);
-
-			for( unsigned int i=0; i<Robot::population_size; i++ )
-				new Swarmer( h );
-		}		
-	// and start the simulation running
-	Robot::Run();
-	
-	// we'll probably never get here, but this keeps the compiler happy.
-	return 0;
- }
+  for( unsigned int i=0; i<Robot::home_count; i++ )
+	 {
+		Home* h = new Home( i < color_count ? colors[i] : Home::Color::Random(), 
+								  drand48() * Robot::worldsize,
+								  drand48() * Robot::worldsize,													
+								  0.1 );
+		
+		Robot::homes.insert(h);
+		
+		for( unsigned int i=0; i<Robot::population_size; i++ )
+		  new Swarmer( h );
+	 }		
+  // and start the simulation running
+  Robot::Run();
+  
+  // we'll probably never get here, but this keeps the compiler happy.
+  return 0;
+}

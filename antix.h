@@ -24,15 +24,7 @@ namespace Uni
   inline double rtod( double r ){ return( r * 180.0 / M_PI ); }
   /** Convert degrees to radians */
   inline double dtor( double d){ return( d * M_PI / 180.0 ); }
-  
-  /** Normalize an angle to within +/_ M_PI. */
-  inline double normalize( double a )
-  {
-		while( a < -M_PI ) a += 2.0*M_PI;
-		while( a >  M_PI ) a -= 2.0*M_PI;	 
-		return a;
-  };
-	
+  	
 	class Home
 	{
 	public:
@@ -74,6 +66,10 @@ namespace Uni
 	 /** Normalize an angle to within +/_ M_PI. */
 	 static double AngleNormalize( double a );
 	 
+	 /** Wrap distances around the torus */
+	 static double WrapDistance( double d );
+
+
 	 /** Start running the simulation. Does not return. */
 	 static void Run();
 
@@ -88,10 +84,13 @@ namespace Uni
 	 static bool paused; // runs only when this is false
 	 static bool show_data; // controls visualization of pixel data
 	 static int winsize; // initial size of the window in pixels
-	 static int displaylist; // robot body macro
 	 static unsigned int home_count; // number of home zones
 
+	 static double radius; // radius of all robot's bodies
 	 static std::set<Home*> homes;
+	 static unsigned int puck_count; // number of pucks that exist in the world
+
+	 static double pickup_range;
 
 #if GRAPHICS
 	 /** render all robots in OpenGL */
@@ -115,9 +114,9 @@ namespace Uni
 			// get a random pose 
 			static Pose Random()
 			{
-				return Pose( drand48() * Robot::worldsize, 
-										 drand48() * Robot::worldsize, 
-										 Robot::AngleNormalize( drand48() * (M_PI*2.0)));
+			  return Pose( drand48() * Robot::worldsize, 
+								drand48() * Robot::worldsize, 
+								Robot::AngleNormalize( drand48() * (M_PI*2.0)));
 			}
 		} pose; // instance: robot is located at this pose
 		
@@ -131,17 +130,18 @@ namespace Uni
 		Speed() : v(0.0), w(0.0) {}		
 		} speed; // instance: robot is moving this fast
 				
-	 class SeeRobot
-	 {
-	 public:
-		 Pose pose;
-		 Speed speed;
-		 double range;
-		 double bearing;
-		 bool haspuck;
+		class SeeRobot
+		{
+		public:
+		  Home* home;
+		  Pose pose;
+		  Speed speed;
+		  double range;
+		  double bearing;
+		  bool haspuck;
 		 
-	 SeeRobot( const Pose& p, const Speed& s, const double range, const double bearing, const bool haspuck )
-		 : pose(p), speed(s), range(range), bearing(bearing), haspuck(haspuck)
+		SeeRobot( Home* home, const Pose& p, const Speed& s, const double range, const double bearing, const bool haspuck )
+		  : home(home), pose(p), speed(s), range(range), bearing(bearing), haspuck(haspuck)
 		 { /* empty */}
 	 };
 	 
@@ -149,28 +149,14 @@ namespace Uni
 			 detected in my field of view */
 	 std::vector<SeeRobot> see_robots;
 
-	 class SeePuck
-	 {
-	 public:
-		 double range;
-		 double bearing;
-		 
-	 SeePuck( const double range, const double bearing )
-		 : range(range), bearing(bearing)
-		 { /* empty */}
-	 };
-	 
-	 /** A sense vector containing information about all the pucks
-			 detected in my field of view */
-	 std::vector<SeePuck> see_pucks;	 
-	 
 	public: class Puck
 	 {
 	 public:
 		 double x, y;
-		 
+		 bool held;
+
 		 /** constructor places a puck at specified pose */
-	 Puck( double x, double y ) : x(x), y(y) {}
+	 Puck( double x, double y ) : x(x), y(y), held(false) {}
 		 
 		 /** default constructor places puck at random pose */
 	 Puck() : x(drand48()*worldsize), y(drand48()*worldsize) {}
@@ -178,10 +164,40 @@ namespace Uni
 	 };		 
 	 
 	 static std::vector<Puck> pucks;
+
+	 class SeePuck
+	 {
+	 public:
+		 Puck* puck;
+		 double range;
+		 double bearing;
+		 
+	 SeePuck( Puck* puck,  const double range, const double bearing )
+		: puck(puck), range(range), bearing(bearing)
+		 { /* empty */}
+	 };
+	 
+	 /** A sense vector containing information about all the pucks
+			 detected in my field of view */
+	 std::vector<SeePuck> see_pucks;	 
+	 
 	 	 
 	 // create a new robot with these parameters
 	 Robot( Home* home, const Pose& pose );
 	 
+	 /** Attempt to pick up a puck. Returns true if one was picked up,
+		  else false. */
+	 bool Pickup(); 
+	 
+	 /** Attempt to drop a puck. Returns true if one was dropped, else
+		  false. */
+	 bool Drop();
+
+	 /** Returns true if we are currently holding a puck. */
+	 bool Holding();
+
+	 Puck* puck_held;
+
 	 virtual ~Robot() {}
 	 
 	 // pure virtual - subclasses must implement this method	 
