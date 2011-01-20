@@ -127,8 +127,8 @@ Robot::Robot( Home* home,
 	  pose(pose),
 		speed(),
 		see_robots(),
-	 see_pucks(),
-	 puck_held(NULL)
+		see_pucks(),
+		puck_held(NULL)
 {
   // add myself to the static vector of all robots
   population.push_back( this );
@@ -257,45 +257,48 @@ void Robot::UpdateSensors()
   see_robots.clear();
   see_pucks.clear();
   
+	// note: the following two large Fsensing operations could safely be
+	// done in parallel since they do not modify any common data
+	
   // first fill the robot sensor
   // check every robot in the world to see if it is detected
   FOR_EACH( it, population )
     {
       Robot* other = *it;
-      
+			
       // discard if it's the same robot
       if( other == this )
-		  continue;
-		
+				continue;
+			
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 		
       double dx( WrapDistance( other->pose.x - pose.x ) );
-		if( fabs(dx) > Robot::range )
-		  continue; // out of range
-		
+			if( fabs(dx) > Robot::range )
+				continue; // out of range
+			
       double dy( WrapDistance( other->pose.y - pose.y ) );		
-		if( fabs(dy) > Robot::range )
-		  continue; // out of range
-		
+			if( fabs(dy) > Robot::range )
+				continue; // out of range
+			
       double range = hypot( dx, dy );
       if( range > Robot::range ) 
 				continue; 
-		
+			
       // discard if it's out of field of view 
       double absolute_heading = atan2( dy, dx );
       double relative_heading = AngleNormalize((absolute_heading - pose.a) );
       if( fabs(relative_heading) > fov/2.0   ) 
-		  continue; 
-		
-		see_robots.push_back( SeeRobot( other->home,
-												  other->pose, 
-												  other->speed, 
-												  range, 
-												  relative_heading,
-												  false ) );			
+				continue; 
+			
+			see_robots.push_back( SeeRobot( other->home,
+																			other->pose, 
+																			other->speed, 
+																			range, 
+																			relative_heading,
+																			false ) );			
     }	
-
+	
   // next fill the puck sensor
   // check every puck in the world to see if it is detected
   FOR_EACH( it, pucks )
@@ -321,9 +324,11 @@ void Robot::UpdateSensors()
       if( fabs(relative_heading) > fov/2.0   ) 
 		  continue; 
 		
-		see_pucks.push_back( SeePuck( &(*it), range, 
-												relative_heading ));
-	 }		
+			// passes all the tests, so we record a puck detection in the
+			// vector
+			see_pucks.push_back( SeePuck( &(*it), range, 
+																		relative_heading ));
+		}		
 }
 
 bool Robot::Pickup()
@@ -334,7 +339,7 @@ bool Robot::Pickup()
 		{
 		  //printf( "see some pucks\n" );
 		  //if( (it->range < pickup_range) && !it->puck->held)
-		  if( (it->range < pickup_range) ) //&& !it->puck->held)
+		  if( (it->range < pickup_range) && !it->puck->held)
 			 {				
 				puck_held = it->puck;
 				puck_held->held = true;

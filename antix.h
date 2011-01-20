@@ -156,10 +156,10 @@ namespace Antix
 		 bool held;
 
 		 /** constructor places a puck at specified pose */
-	 Puck( double x, double y ) : x(x), y(y), held(false) {}
+		 //Puck( double x, double y ) : x(x), y(y), held(false) {}
 		 
 		 /** default constructor places puck at random pose */
-	 Puck() : x(drand48()*worldsize), y(drand48()*worldsize) {}
+	 Puck() : x(drand48()*worldsize), y(drand48()*worldsize), held(false) {}
 		 
 	 };		 
 	 
