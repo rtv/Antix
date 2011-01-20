@@ -87,7 +87,7 @@ namespace Antix
 	 static unsigned int home_count; // number of home zones
 
 	 static double radius; // radius of all robot's bodies
-	 static std::set<Home*> homes;
+	 static std::vector<Home*> homes;
 	 static unsigned int puck_count; // number of pucks that exist in the world
 
 	 static double pickup_range;
@@ -129,20 +129,20 @@ namespace Antix
 			// constructor sets speeds to zero
 		Speed() : v(0.0), w(0.0) {}		
 		} speed; // instance: robot is moving this fast
-				
+		
 		class SeeRobot
 		{
 		public:
-		  Home* home;
+		  const Home* home;
 		  Pose pose;
 		  Speed speed;
 		  double range;
 		  double bearing;
 		  bool haspuck;
-		 
-		SeeRobot( Home* home, const Pose& p, const Speed& s, const double range, const double bearing, const bool haspuck )
+			
+		SeeRobot( const Home* home, const Pose& p, const Speed& s, const double range, const double bearing, const bool haspuck )
 		  : home(home), pose(p), speed(s), range(range), bearing(bearing), haspuck(haspuck)
-		 { /* empty */}
+			{ /* empty */}
 	 };
 	 
 	 /** A sense vector containing information about all the robots
@@ -159,7 +159,9 @@ namespace Antix
 		 //Puck( double x, double y ) : x(x), y(y), held(false) {}
 		 
 		 /** default constructor places puck at random pose */
-	 Puck() : x(drand48()*worldsize), y(drand48()*worldsize), held(false) {}
+	 Puck() 
+		 : x(drand48()*worldsize), y(drand48()*worldsize), held(false) 
+			 { /* empty */ }
 		 
 	 };		 
 	 
@@ -170,10 +172,11 @@ namespace Antix
 	 public:
 		 Puck* puck;
 		 double range;
-		 double bearing;
+		 double bearing;		 
+		 bool held;
 		 
-	 SeePuck( Puck* puck,  const double range, const double bearing )
-		: puck(puck), range(range), bearing(bearing)
+	 SeePuck( Puck* puck,  const double range, const double bearing, const bool held )
+		 : puck(puck), range(range), bearing(bearing), held(held)
 		 { /* empty */}
 	 };
 	 
@@ -182,33 +185,37 @@ namespace Antix
 	 std::vector<SeePuck> see_pucks;	 
 	 
 	 	 
-	 // create a new robot with these parameters
+	 // constructor
 	 Robot( Home* home, const Pose& pose );
 	 
+	 // destructor
+	 virtual ~Robot() {}
+	 
 	 /** Attempt to pick up a puck. Returns true if one was picked up,
-		  else false. */
+			 else false. */
 	 bool Pickup(); 
 	 
 	 /** Attempt to drop a puck. Returns true if one was dropped, else
-		  false. */
+			 false. */
 	 bool Drop();
-
+	 
 	 /** Returns true if we are currently holding a puck. */
 	 bool Holding();
-
-	 Puck* puck_held;
-
-	 virtual ~Robot() {}
 	 
-	 // pure virtual - subclasses must implement this method	 
+	 
+	 /** pure virtual - subclasses must implement this method  */
 	 virtual void Controller() = 0;
+
+
+	private:
+	 Puck* puck_held;
 	 
 	 // render the robot in OpenGL
 	 void Draw();
 	 
 	 // move the robot
 	 void UpdatePose();
-
+	 
 	 // update
 	 void UpdateSensors();
   };	

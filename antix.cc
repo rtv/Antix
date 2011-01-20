@@ -26,7 +26,7 @@ double Robot::radius(0.01);
 double Robot::range( 0.1 );
 double Robot::worldsize(1.0);
 int Robot::winsize( 600 );
-std::set<Home*> Robot::homes;
+std::vector<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
 std::vector<Robot::Puck> Robot::pucks;
 uint64_t Robot::updates(0);
@@ -98,18 +98,19 @@ void Robot::DrawAll()
 	FOR_EACH( r, population )
 		(*r)->Draw();
 	
-	FOR_EACH( h, homes )
+	FOR_EACH( it, homes )
 		{
-			Home* hp = *h;
-			glColor3f( hp->color.r, 
-								 hp->color.g,
-								 hp->color.b );
+			Home* h = *it;
 			
-			GlDrawCircle( hp->x, hp->y, hp->r, 16 );
-			GlDrawCircle( hp->x+worldsize, hp->y, hp->r, 16 );
-			GlDrawCircle( hp->x-worldsize, hp->y, hp->r, 16 );
-			GlDrawCircle( hp->x, hp->y+worldsize, hp->r, 16 );
-			GlDrawCircle( hp->x, hp->y-worldsize, hp->r, 16 );
+			glColor3f( h->color.r, 
+								 h->color.g,
+								 h->color.b );
+			
+			GlDrawCircle( h->x, h->y, h->r, 16 );
+			GlDrawCircle( h->x+worldsize, h->y, h->r, 16 );
+			GlDrawCircle( h->x-worldsize, h->y, h->r, 16 );
+			GlDrawCircle( h->x, h->y+worldsize, h->r, 16 );
+			GlDrawCircle( h->x, h->y-worldsize, h->r, 16 );
 		}
 	
 	glColor3f( 1,1,1 ); // green
@@ -327,26 +328,24 @@ void Robot::UpdateSensors()
 			// passes all the tests, so we record a puck detection in the
 			// vector
 			see_pucks.push_back( SeePuck( &(*it), range, 
-																		relative_heading ));
+																		relative_heading,
+																		it->held));
 		}		
 }
 
 bool Robot::Pickup()
 {
-  
   if( ! puck_held ) 
-	 FOR_EACH( it, see_pucks )
-		{
-		  //printf( "see some pucks\n" );
-		  //if( (it->range < pickup_range) && !it->puck->held)
-		  if( (it->range < pickup_range) && !it->puck->held)
-			 {				
-				puck_held = it->puck;
-				puck_held->held = true;
-				return true;
-			 }		  		  
-		}
-
+		FOR_EACH( it, see_pucks )
+			{
+				if( (it->range < pickup_range) && !it->puck->held)
+					{				
+						puck_held = it->puck;
+						puck_held->held = true;
+						return true;
+					}		  		  
+			}
+	
   return false; // already holding or nothing close enough
 }
 
