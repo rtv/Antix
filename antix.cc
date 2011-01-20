@@ -19,16 +19,16 @@ const char* PROGNAME = "universe";
 // initialize static members
 double Robot::worldsize(1.0);
 double Robot::range( 0.1 );
-double Robot::fov(  dtor(270.0) );
+double Robot::fov(  dtor(90.0) );
 std::vector<Robot*> Robot::population;
-unsigned int Robot::population_size( 100 );
-unsigned int Robot::sleep_msec( 50 );
+unsigned int Robot::population_size( 20 );
+unsigned int Robot::sleep_msec( 10 );
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 bool Robot::paused( false );
 int Robot::winsize( 600 );
 //int Robot::displaylist(0);
-bool Robot::show_data( true );
+bool Robot::show_data( false );
 std::vector<Robot::Puck> Robot::pucks;
 unsigned int Robot::home_count(3);
 std::set<Home*> Robot::homes;
@@ -39,7 +39,7 @@ double Robot::pickup_range( Robot::range/5.0 );
 char usage[] = "Universe understands these command line arguments:\n"
  "  -? : Prints this helpful message.\n"
  "  -c <int> : sets the number of pixels in the robots' sensor.\n"
- "  -d  Disables drawing the sensor field of view. Speeds things up a bit.\n"
+ "  -d  Enables drawing the sensor field of view. Speeds things up a bit.\n"
  "  -f <float> : sets the sensor field of view angle in degrees.\n"
  "  -p <int> : set the size of the robot population.\n"
  "  -r <float> : sets the sensor field of view range.\n"
@@ -201,8 +201,8 @@ void Robot::Init( int argc, char** argv )
 				printf( "[Uni] winsize: %d\n", winsize );
 				break;
 
-			case 'd': show_data= false;
-			  puts( "[Uni] hide data" );
+			case 'd': show_data=true;
+			  puts( "[Uni] show data" );
 			  break;
 #endif			
 			case '?':

@@ -57,8 +57,8 @@ public:
 		  // turn towards home		  
 		  heading_error = AngleNormalize( da - pose.a );// < 0  ? 0.05 : -0.05;
 		  
-		  // if we're well inside the home radius
-		  if( dist < home->r/2.0 )
+		  // if we're some random distance inside the home radius
+		  if( dist < drand48() * home->r )
 			 Drop(); // release the puck (implies we won't be holding
 		  // next time round)
 		}
@@ -96,11 +96,14 @@ public:
 				
 				// if I've arrived at the last place and not yet found a
 				// puck, choose another place 
-				if( hypot( lx,ly ) < 0.05 )
-				  {
-					 lastx += drand48() * 0.2 - 0.1;
-					 lasty += drand48() * 0.2 - 0.1;
-				  }
+ 				if( hypot( lx,ly ) < 0.05 )
+ 				  {
+ 					 lastx += drand48() * 0.4 - 0.2;
+ 					 lasty += drand48() * 0.4 - 0.2;
+					 
+ 					 //DistanceNormalize( lastx );
+ 					 //DistanceNormalize( lasty );
+ 				  }
 			 }
 		}
 
