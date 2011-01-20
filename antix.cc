@@ -1,52 +1,52 @@
 /****
-   universe.c
-   version 2
+   antix.cc
+   version 1
    Richard Vaughan  
+	 Clone this package from git://github.com/rtv/Antix.git
 ****/
 
 #include <assert.h>
 #include <unistd.h>
 
 #include "antix.h"
-using namespace Uni;
+using namespace Antix;
 
-const char* PROGNAME = "universe";
+const char* PROGNAME = "antix";
 
 #if GRAPHICS
 #include <GLUT/glut.h> // OS X users need <glut/glut.h> instead
 #endif
 
 // initialize static members
-double Robot::worldsize(1.0);
-double Robot::range( 0.1 );
+bool Robot::paused( false );
+bool Robot::show_data( false );
 double Robot::fov(  dtor(90.0) );
+double Robot::pickup_range( Robot::range/5.0 );
+double Robot::radius(0.01);
+double Robot::range( 0.1 );
+double Robot::worldsize(1.0);
+int Robot::winsize( 600 );
+std::set<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
-unsigned int Robot::population_size( 20 );
-unsigned int Robot::sleep_msec( 10 );
+std::vector<Robot::Puck> Robot::pucks;
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
-bool Robot::paused( false );
-int Robot::winsize( 600 );
-//int Robot::displaylist(0);
-bool Robot::show_data( false );
-std::vector<Robot::Puck> Robot::pucks;
-unsigned int Robot::home_count(3);
-std::set<Home*> Robot::homes;
-double Robot::radius(0.01);
+unsigned int Robot::home_count(1);
+unsigned int Robot::population_size( 20 );
 unsigned int Robot::puck_count(100);
-double Robot::pickup_range( Robot::range/5.0 );
+unsigned int Robot::sleep_msec( 10 );
 
-char usage[] = "Universe understands these command line arguments:\n"
- "  -? : Prints this helpful message.\n"
- "  -c <int> : sets the number of pixels in the robots' sensor.\n"
- "  -d  Enables drawing the sensor field of view. Speeds things up a bit.\n"
- "  -f <float> : sets the sensor field of view angle in degrees.\n"
- "  -p <int> : set the size of the robot population.\n"
- "  -r <float> : sets the sensor field of view range.\n"
- "  -s <float> : sets the side length of the (square) world.\n"
- "  -u <int> : sets the number of updates to run before quitting.\n"
- "  -w <int> : sets the initial size of the window, in pixels.\n"
- "  -z <int> : sets the number of milliseconds to sleep between updates.\n";
+const char usage[] = "Antix understands these command line arguments:\n"
+	"  -? : Prints this helpful message.\n"
+	"  -c <int> : sets the number of pixels in the robots' sensor.\n"
+	"  -d  Enables drawing the sensor field of view. Speeds things up a bit.\n"
+	"  -f <float> : sets the sensor field of view angle in degrees.\n"
+	"  -p <int> : set the size of the robot population.\n"
+	"  -r <float> : sets the sensor field of view range.\n"
+	"  -s <float> : sets the side length of the (square) world.\n"
+	"  -u <int> : sets the number of updates to run before quitting.\n"
+	"  -w <int> : sets the initial size of the window, in pixels.\n"
+	"  -z <int> : sets the number of milliseconds to sleep between updates.\n";
 
 #if GRAPHICS
 // GLUT callback functions ---------------------------------------------------
@@ -83,9 +83,18 @@ static void mouse_func(int button, int state, int x, int y)
 	 }
 }
 
+
+void GlDrawCircle( double x, double y, double r, double count )
+{
+	glBegin(GL_LINE_LOOP);
+	for( float a=0; a<(M_PI*2.0); a+=M_PI/count )
+		glVertex2f( x + sin(a) * r, y + cos(a) * r );
+	glEnd();
+}
+
 // render all robots in OpenGL
 void Robot::DrawAll()
-{
+{		
 	FOR_EACH( r, population )
 		(*r)->Draw();
 	
@@ -96,37 +105,11 @@ void Robot::DrawAll()
 								 hp->color.g,
 								 hp->color.b );
 			
-			glBegin(GL_LINE_LOOP);
-			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
-				glVertex2f( hp->x + sin(a) * hp->r, 
-										hp->y + cos(a) * hp->r );
-			glEnd();
-
-			glBegin(GL_LINE_LOOP);
-			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
-				glVertex2f( hp->x+worldsize + sin(a) * hp->r, 
-										hp->y + cos(a) * hp->r );
-			glEnd();
-
-			glBegin(GL_LINE_LOOP);
-			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
-				glVertex2f( hp->x-worldsize + sin(a) * hp->r, 
-										hp->y + cos(a) * hp->r );
-			glEnd();
-
-			glBegin(GL_LINE_LOOP);
-			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
-				glVertex2f( hp->x + sin(a) * hp->r, 
-										hp->y + worldsize + cos(a) * hp->r );
-			glEnd();
-
-			glBegin(GL_LINE_LOOP);
-			for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
-				glVertex2f( hp->x + sin(a) * hp->r, 
-										hp->y - worldsize + cos(a) * hp->r );
-			glEnd();
-
-
+			GlDrawCircle( hp->x, hp->y, hp->r, 16 );
+			GlDrawCircle( hp->x+worldsize, hp->y, hp->r, 16 );
+			GlDrawCircle( hp->x-worldsize, hp->y, hp->r, 16 );
+			GlDrawCircle( hp->x, hp->y+worldsize, hp->r, 16 );
+			GlDrawCircle( hp->x, hp->y-worldsize, hp->r, 16 );
 		}
 	
 	glColor3f( 1,1,1 ); // green
@@ -158,51 +141,56 @@ void Robot::Init( int argc, char** argv )
 	
   // parse arguments to configure Robot static members
 	int c;
-	while( ( c = getopt( argc, argv, "?da:p:s:f:r:c:u:z:w:")) != -1 )
+	while( ( c = getopt( argc, argv, "?dh:a:p:s:f:r:c:u:z:w:")) != -1 )
 		switch( c )
 			{
+			case 'h':
+			  home_count = atoi( optarg );
+			  printf( "[Antix] home count: %d\n", home_count );
+			  break;
+
 			case 'a':
 			  puck_count = atoi( optarg );
-			  printf( "[Uni] puck count: %d\n", puck_count );
+			  printf( "[Antix] puck count: %d\n", puck_count );
 			  break;
 			  
 			case 'p': 
 				population_size = atoi( optarg );
-				printf( "[Uni] population_size: %d\n", population_size );
+				printf( "[Antix] population_size: %d\n", population_size );
 				break;
 				
 			case 's': 
 				worldsize = atof( optarg );
-				printf( "[Uni] worldsize: %.2f\n", worldsize );
+				printf( "[Antix] worldsize: %.2f\n", worldsize );
 				break;
 				
 			case 'f': 
 				fov = dtor(atof( optarg )); // degrees to radians
-				printf( "[Uni] fov: %.2f\n", fov );
+				printf( "[Antix] fov: %.2f\n", fov );
 				break;
 				
 			case 'r': 
 				range = atof( optarg );
-				printf( "[Uni] range: %.2f\n", range );
+				printf( "[Antix] range: %.2f\n", range );
 				break;
 								
       case 'u':
 				updates_max = atol( optarg );
-				printf( "[Uni] updates_max: %lu\n", (long unsigned)updates_max );
+				printf( "[Antix] updates_max: %lu\n", (long unsigned)updates_max );
 				break;
 				
 			case 'z':
 				sleep_msec = atoi( optarg );
-				printf( "[Uni] sleep_msec: %d\n", sleep_msec );
+				printf( "[Antix] sleep_msec: %d\n", sleep_msec );
 				break;
 				
 #if GRAPHICS
 			case 'w': winsize = atoi( optarg );
-				printf( "[Uni] winsize: %d\n", winsize );
+				printf( "[Antix] winsize: %d\n", winsize );
 				break;
 
 			case 'd': show_data=true;
-			  puts( "[Uni] show data" );
+			  puts( "[Antix] show data" );
 			  break;
 #endif			
 			case '?':
@@ -211,7 +199,7 @@ void Robot::Init( int argc, char** argv )
 			  break;
 
 			default:
-				fprintf( stderr, "[Uni] Option parse error.\n" );
+				fprintf( stderr, "[Antix] Option parse error.\n" );
 				puts( usage );
 				exit(-1); // error
 			}
@@ -228,7 +216,7 @@ void Robot::Init( int argc, char** argv )
   //glClearColor( 0.8,0.8,1.0,1.0 ); // pale blue
   // glClearColor( 0,0,0,1 ); // black
   //glClearColor( 0.2,0,0,1 ); // dark red
-  glClearColor( 0.25,0.25,0.25,1 ); // dark grey
+  glClearColor( 0.1,0.1,0.1,1 ); // dark grey
   glutDisplayFunc( display_func );
   glutTimerFunc( 50, timer_func, 0 );
   glutMouseFunc( mouse_func );
@@ -458,36 +446,32 @@ void Robot::Draw()
 	 {
 		glColor3f( 1,0,0 ); // red
 		
-		for( std::vector<SeeRobot>::const_iterator it = see_robots.begin();
-			  it != see_robots.end();
-			  ++it )
+		FOR_EACH( it, see_robots )
 		  {
-			 float dx = it->range * cos(it->bearing);
-			 float dy = it->range * sin(it->bearing);
-			 
-			 glBegin( GL_LINES );
-			 glVertex2f( 0,0 );
-			 glVertex2f( dx, dy );
-			 glEnd();
+				float dx = it->range * cos(it->bearing);
+				float dy = it->range * sin(it->bearing);
+				
+				glBegin( GL_LINES );
+				glVertex2f( 0,0 );
+				glVertex2f( dx, dy );
+				glEnd();
 		  }
-
-		glColor3f( 0.5,1,0.5 ); // light green
 		
-		for( std::vector<SeePuck>::const_iterator it = see_pucks.begin();
-			  it != see_pucks.end();
-			  ++it )
+		glColor3f( 0.3,0.8,0.3 ); // light green
+		
+		FOR_EACH( it, see_pucks )
 		  {
-			 float dx = it->range * cos(it->bearing);
-			 float dy = it->range * sin(it->bearing);
-			 
-			 glBegin( GL_LINES );
-			 glVertex2f( 0,0 );
-			 glVertex2f( dx, dy );
-			 glEnd();
+				float dx = it->range * cos(it->bearing);
+				float dy = it->range * sin(it->bearing);
+				
+				glBegin( GL_LINES );
+				glVertex2f( 0,0 );
+				glVertex2f( dx, dy );
+				glEnd();
 		  }
 
 		
-		glColor3f( 0.5,0.5,0.5 ); // grey
+		glColor3f( 0.4,0.4,0.4 ); // grey
 
 		// draw the sensor FOV
 		glBegin(GL_LINE_LOOP);

@@ -6,7 +6,7 @@
 
 #include <math.h>
 #include "antix.h"
-using namespace Uni;
+using namespace Antix;
 
 /** returns +1 if the argument is positive, -1 if negative, for any type */
 template <typename T> int sgn(T val)
@@ -16,7 +16,7 @@ template <typename T> int sgn(T val)
 
 Home::Color colors[] = { Home::Color(1,0,0), 
 												 Home::Color(0,0.5,0), // darker green 
-												 Home::Color(0,0,1), 
+												 Home::Color(0.3,0.3,1),  // lighter blue
 												 Home::Color(1,1,0), 
 												 Home::Color(1,0,1), 
 												 Home::Color(0,1,1), 
@@ -139,9 +139,9 @@ int main( int argc, char* argv[] )
   for( unsigned int i=0; i<Robot::home_count; i++ )
 	 {
 		Home* h = new Home( i < color_count ? colors[i] : Home::Color::Random(), 
-								  drand48() * Robot::worldsize,
-								  drand48() * Robot::worldsize,													
-								  0.1 );
+												i ? drand48() * Robot::worldsize : Robot::worldsize/2.0,
+												i ? drand48() * Robot::worldsize : Robot::worldsize/2.0,													
+												0.1 );
 		
 		Robot::homes.insert(h);
 		

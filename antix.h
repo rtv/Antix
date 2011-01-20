@@ -1,6 +1,6 @@
 /****
-	  universe.h
-		Clone this package from git://github.com/rtv/universe.git
+	  antix.h
+		Clone this package from git://github.com/rtv/Antix.git
 	  version 2
 	  Richard Vaughan  
 ****/
@@ -18,7 +18,7 @@
 #define VAR(V,init) __typeof(init) V=(init)
 #define FOR_EACH(I,C) for(VAR(I,(C).begin());I!=(C).end();I++)
 
-namespace Uni
+namespace Antix
 {
   /** Convert radians to degrees. */
   inline double rtod( double r ){ return( r * 180.0 / M_PI ); }
@@ -212,4 +212,4 @@ namespace Uni
 	 // update
 	 void UpdateSensors();
   };	
-}; // namespace Uni
+}; // namespace Antix
