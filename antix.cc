@@ -11,12 +11,6 @@
 #include "antix.h"
 using namespace Antix;
 
-const char* PROGNAME = "antix";
-
-#if GRAPHICS
-#include <GLUT/glut.h> // OS X users need <glut/glut.h> instead
-#endif
-
 // initialize static members
 bool Robot::paused( false );
 bool Robot::show_data( false );
@@ -25,14 +19,13 @@ double Robot::pickup_range( Robot::range/5.0 );
 double Robot::radius(0.01);
 double Robot::range( 0.1 );
 double Robot::worldsize(1.0);
-int Robot::winsize( 600 );
 std::vector<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
 std::vector<Robot::Puck> Robot::pucks;
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 unsigned int Robot::home_count(1);
-unsigned int Robot::population_size( 20 );
+unsigned int Robot::home_population( 20 );
 unsigned int Robot::puck_count(100);
 unsigned int Robot::sleep_msec( 10 );
 
@@ -48,79 +41,13 @@ const char usage[] = "Antix understands these command line arguments:\n"
 	"  -w <int> : sets the initial size of the window, in pixels.\n"
 	"  -z <int> : sets the number of milliseconds to sleep between updates.\n";
 
-#if GRAPHICS
-// GLUT callback functions ---------------------------------------------------
 
-// update the world - this is called whenever GLUT runs out of events
-// to process
-static void idle_func( void )
+Home::Home( const Color& color, double x, double y, double r ) 
+	: color(color), x(x), y(y), r(r) 
 {
-  Robot::UpdateAll();
+	Robot::homes.push_back(this);
 }
 
-static void timer_func( int dummy )
-{
-  glutPostRedisplay(); // force redraw
-}
-
-// draw the world - this is called whenever the window needs redrawn
-static void display_func( void ) 
-{  
-  Robot::winsize = glutGet( GLUT_WINDOW_WIDTH );
-  glClear( GL_COLOR_BUFFER_BIT );  
-  Robot::DrawAll();
-  glutSwapBuffers();
-	
-  // run this function again in about 50 msec
-  glutTimerFunc( 20, timer_func, 0 );
-}
-
-static void mouse_func(int button, int state, int x, int y) 
-{  
-  if( (button == GLUT_LEFT_BUTTON) && (state == GLUT_DOWN ) )
-	 {
-		Robot::paused = !Robot::paused;
-	 }
-}
-
-
-void GlDrawCircle( double x, double y, double r, double count )
-{
-	glBegin(GL_LINE_LOOP);
-	for( float a=0; a<(M_PI*2.0); a+=M_PI/count )
-		glVertex2f( x + sin(a) * r, y + cos(a) * r );
-	glEnd();
-}
-
-// render all robots in OpenGL
-void Robot::DrawAll()
-{		
-	FOR_EACH( r, population )
-		(*r)->Draw();
-	
-	FOR_EACH( it, homes )
-		{
-			Home* h = *it;
-			
-			glColor3f( h->color.r, 
-								 h->color.g,
-								 h->color.b );
-			
-			GlDrawCircle( h->x, h->y, h->r, 16 );
-			GlDrawCircle( h->x+worldsize, h->y, h->r, 16 );
-			GlDrawCircle( h->x-worldsize, h->y, h->r, 16 );
-			GlDrawCircle( h->x, h->y+worldsize, h->r, 16 );
-			GlDrawCircle( h->x, h->y-worldsize, h->r, 16 );
-		}
-	
-	glColor3f( 1,1,1 ); // green
-	glBegin( GL_POINTS );
-	FOR_EACH( p, pucks )
-		glVertex2f( p->x, p->y );
-	glEnd();
-}
-
-#endif // GRAPHICS
 
 Robot::Robot( Home* home,
 							const Pose& pose )
@@ -156,8 +83,8 @@ void Robot::Init( int argc, char** argv )
 			  break;
 			  
 			case 'p': 
-				population_size = atoi( optarg );
-				printf( "[Antix] population_size: %d\n", population_size );
+				home_population = atoi( optarg );
+				printf( "[Antix] home_population: %d\n", home_population );
 				break;
 				
 			case 's': 
@@ -209,47 +136,7 @@ void Robot::Init( int argc, char** argv )
 	  pucks.push_back( Puck() );	
 	
 #if GRAPHICS
-  // initialize opengl graphics
-  glutInit( &argc, argv );
-  glutInitWindowSize( winsize, winsize );
-  glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA );
-  glutCreateWindow( PROGNAME );
-  //glClearColor( 0.8,0.8,1.0,1.0 ); // pale blue
-  // glClearColor( 0,0,0,1 ); // black
-  //glClearColor( 0.2,0,0,1 ); // dark red
-  glClearColor( 0.1,0.1,0.1,1 ); // dark grey
-  glutDisplayFunc( display_func );
-  glutTimerFunc( 50, timer_func, 0 );
-  glutMouseFunc( mouse_func );
-  glutIdleFunc( idle_func );
-  glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
-  glEnable( GL_BLEND );
-  glMatrixMode( GL_PROJECTION );
-  glLoadIdentity();
-  gluOrtho2D( 0,1,0,1 );
-  glMatrixMode( GL_MODELVIEW );
-  glLoadIdentity();
-  glScalef( 1.0/Robot::worldsize, 1.0/Robot::worldsize, 1 ); 
-  
-//   // define a display list for a robot body
-//   double h = 0.01;
-//   double w = 0.01;
-
-	glPointSize( 4.0 );
-
-//   displaylist = glGenLists(1);
-//   glNewList( displaylist, GL_COMPILE );
-
-//   glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-
-//   glBegin( GL_POLYGON );
-//   glVertex2f( h/2.0, 0 );
-//   glVertex2f( -h/2.0,  w/2.0 );
-//   glVertex2f( -h/2.0, -w/2.0 );
-//   glEnd();
-
-//   glEndList();
-
+	InitGraphics( argc, argv );
 #endif // GRAPHICS
 }
 
@@ -338,15 +225,18 @@ bool Robot::Pickup()
   if( ! puck_held ) 
 		FOR_EACH( it, see_pucks )
 			{
+				// is the puck close enough and is it not held already?
 				if( (it->range < pickup_range) && !it->puck->held)
 					{				
+						// pick it up
 						puck_held = it->puck;
 						puck_held->held = true;
 						return true;
 					}		  		  
 			}
 	
-  return false; // already holding or nothing close enough
+	// already holding or nothing close enough
+  return false; 
 }
 
 bool Robot::Holding()
@@ -404,107 +294,15 @@ void Robot::UpdateAll()
 
   ++updates;
   
-  // possibly snooze to save CPU and slow things down
+  // possibly snooze to save CPU and slow things down 
   if( sleep_msec > 0 )
-	 usleep( sleep_msec * 1e3 );
+		usleep( sleep_msec * 1e3 );
 }
-
-// draw a robot
-void Robot::Draw()
-{
-#if GRAPHICS
-  glPushMatrix();
-
-	// shift into this robot's local coordinate frame
-  glTranslatef( pose.x, pose.y, 0 );
-  glRotatef( rtod(pose.a), 0,0,1 );
-  
-	glColor3f( home->color.r, home->color.g, home->color.b ); 
-	
-	double radius = Robot::radius;
-	
-	// if robots are smaller than 4 pixels across, draw them as points
-	if( (radius * (double)winsize/(double)worldsize) < 2.0 )
-	  {
-		 glBegin( GL_POINTS );
-		 glVertex2f( 0,0 );
-		 glEnd();
-	  }
-	else
-	  {
-		 // draw a circular body
-		 glBegin(GL_LINE_LOOP);
-		 for( float a=0; a<(M_PI*2.0); a+=M_PI/16 )
-			glVertex2f( sin(a) * radius, 
-							cos(a) * radius );
-		 glEnd();
-		 
-		 // draw a nose indicating forward direction
-		 glBegin(GL_LINES);
-		 glVertex2f( 0, 0 );
-		 glVertex2f( Robot::radius, 0 );
-		 glEnd();
-	  }
-
-  if( Robot::show_data )
-	 {
-		glColor3f( 1,0,0 ); // red
-		
-		FOR_EACH( it, see_robots )
-		  {
-				float dx = it->range * cos(it->bearing);
-				float dy = it->range * sin(it->bearing);
-				
-				glBegin( GL_LINES );
-				glVertex2f( 0,0 );
-				glVertex2f( dx, dy );
-				glEnd();
-		  }
-		
-		glColor3f( 0.3,0.8,0.3 ); // light green
-		
-		FOR_EACH( it, see_pucks )
-		  {
-				float dx = it->range * cos(it->bearing);
-				float dy = it->range * sin(it->bearing);
-				
-				glBegin( GL_LINES );
-				glVertex2f( 0,0 );
-				glVertex2f( dx, dy );
-				glEnd();
-		  }
-
-		
-		glColor3f( 0.4,0.4,0.4 ); // grey
-
-		// draw the sensor FOV
-		glBegin(GL_LINE_LOOP);
-		
-		glVertex2f( 0, 0 );
-		
-		double right = -fov/2.0;
-		double left = +fov/2.0;// + M_PI;
-		double incr = fov/32.0;
-		for( float a=right; a<left; a+=incr)
-		  glVertex2f( cos(a) * range, 
-						  sin(a) * range );
-
-		glVertex2f( cos(left) * range, 
-						sin(left) * range );
-		
-		glEnd();		
-	 }
-	
-	// shift out of local coordinate frame
-  glPopMatrix();
-#endif // GRAPHICS
-}
-
 
 void Robot::Run()
 {
 #if GRAPHICS
-  glutMainLoop();
+  UpdateGui();
 #else
   while( 1 )
     UpdateAll();

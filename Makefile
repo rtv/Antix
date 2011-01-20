@@ -13,7 +13,7 @@ CC = g++
 CXXFLAGS = -g -Wall -O3 $(GLUTFLAGS)
 LIBS =  -g -lm $(GLUTLIBS)
 
-SRC = antix.h antix.cc controller.cc
+SRC = antix.h antix.cc controller.cc gui.cc main.cc 
 
 all: antix
 

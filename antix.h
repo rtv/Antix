@@ -46,16 +46,17 @@ namespace Antix
 		
 		double x, y, r;
 		
-	Home( const Color& color, double x, double y, double r ) : color(color), x(x), y(y), r(r) {}
+		Home( const Color& color, double x, double y, double r );
 	};
 	
   class Robot
   {
   public:
-	 // STATIC DATA AND METHODS ------------------------------------------
-	 
+
 	 /** initialization: call this before using any other calls. */	
 	 static void Init( int argc, char** argv );
+
+	 static void UpdateGui();
 
 	 /** update all robots */
 	 static void UpdateAll();
@@ -69,37 +70,38 @@ namespace Antix
 	 /** Wrap distances around the torus */
 	 static double WrapDistance( double d );
 
-
 	 /** Start running the simulation. Does not return. */
 	 static void Run();
 
-	 static uint64_t updates; // number of simulation steps so far	 
-	 static uint64_t updates_max; // number of simulation steps to run before quitting (0 means infinity)
-	 static unsigned int sleep_msec; // number of milliseconds to sleep at each update
-	 static double worldsize; // side length of the toroidal world
-	 static double range;    // sensor detects objects up tp this maximum distance
-	 static double fov;      // sensor detects objects within this angular field-of-view about the current heading
-	 static std::vector<Robot*> population;
-	 static unsigned int population_size; // number of robots
 	 static bool paused; // runs only when this is false
 	 static bool show_data; // controls visualization of pixel data
-	 static int winsize; // initial size of the window in pixels
-	 static unsigned int home_count; // number of home zones
-
-	 static double radius; // radius of all robot's bodies
-	 static std::vector<Home*> homes;
-	 static unsigned int puck_count; // number of pucks that exist in the world
-
+	 static double fov;      // sensor detects objects within this angular field-of-view about the current heading
 	 static double pickup_range;
+	 static double radius; // radius of all robot's bodies
+	 static double range;    // sensor detects objects up tp this maximum distance
+	 static double worldsize; // side length of the toroidal world
+	 static std::vector<Home*> homes;
+	 static std::vector<Robot*> population;
+	 static uint64_t updates; // number of simulation steps so far	 
+	 static uint64_t updates_max; // number of simulation steps to run before quitting (0 means infinity)
+	 static unsigned int home_count; // number of home zones
+	 static unsigned int home_population; // number of robots
+	 static unsigned int puck_count; // number of pucks that exist in the world
+	 static unsigned int sleep_msec; // number of milliseconds to sleep at each update
 
 #if GRAPHICS
+	 static int winsize; // initial size of the window in pixels
+
+	 /** initialization: call this before using any other calls. */	
+	 static void InitGraphics( int argc, char* argv[] );
+
 	 /** render all robots in OpenGL */
 	 static void DrawAll();
+
+	 // render the robot in OpenGL
+	 void Draw();	 
 #endif
 	 
-
-	 // NON-STATIC DATA AND METHODS ------------------------------------------
-
 	 // deliver pucks to this location
 	 Home* home;
 	 
@@ -201,17 +203,12 @@ namespace Antix
 	 
 	 /** Returns true if we are currently holding a puck. */
 	 bool Holding();
-	 
-	 
+	  
 	 /** pure virtual - subclasses must implement this method  */
 	 virtual void Controller() = 0;
 
-
 	private:
 	 Puck* puck_held;
-	 
-	 // render the robot in OpenGL
-	 void Draw();
 	 
 	 // move the robot
 	 void UpdatePose();
