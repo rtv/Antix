@@ -184,7 +184,7 @@ void Robot::UpdateSensors()
 																			other->speed, 
 																			range, 
 																			relative_heading,
-																			false ) );			
+																			other->Holding() ) );			
     }	
 	
   // next fill the puck sensor

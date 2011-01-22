@@ -1,0 +1,71 @@
+CMPT 431 Antix Project instructions
+====================================
+
+0. rtv (instructor) todos:
+  - collisions
+  - scoring
+
+1. Prerequisites
+ - a UNIX-like OS (tested on Linux and OS X)
+ - OpenGL and GLUT
+ - C++, STL, Make
+
+2. Obtaining the code:
+
+ - The original Antix repository is at http://github.com/rtv/Antix
+   - learn about github at http://help.github.com
+   - learn about git at http://git-scm.com
+
+ - Cloning the repo (to get your local copy to work on)
+	 - git clone git@github.com:rtv/Antix.git
+
+3. Building and running the code
+ - cd Antix
+ - (edit the Makefile to suit your system: OS X and Linux setups are provided)
+ - make
+ - ./antix
+
+4. The Big Task
+ - Extend (or reimplement) Antix to support
+   - 1,000,000 robots
+     - the simulation backend MAY be implemented as multiple threads, processes or hosts
+   - 1000 homes (teams) each with at least one independent controller
+     - controllers MUST be separate OS processes
+     - controllers MAY run on separate hosts to the simulation backend
+   - a visualization of the whole world
+   - the system should run as fast as you can make it, given the time available.
+   - your target platform is the CSIL laboratory. Additionally, access to the CMPT cluster or
+      Amazon Elastic Compute Cloud can be arranged privately or through the instructor.
+   - using git for SCM is _strongly_ recommended. You may find github useful for collaboration, too.
+
+5. The First Task
+  - Design a system architecture and development plan that can achieve the Big Task
+    - no code, just design
+    - split your team equally between backend and client-side responsibilities
+    - present a technical argument for your design
+      - why will it work?
+      - what could go wrong?
+      - what is Plan B, C?
+      - what remains to be decided?
+    - present a plan for development and testing, considering  balanced workload for team members
+    - presentations will be by 1 person from each team
+      - 20 minutes
+      - use computer, transparencies or blackboard BUT
+      - your slides and notes must be submitted on the day, and should be comprehensible by themselves
+    - Presentations will be in class on tuesday 25 January and followed by class critique.
+
+6. Subsequent tasks
+  - depend on your development plan, but each team will report each week, alternating between 
+    backend and client sub-teams. Every person presents at least once.
+	- Hint: improve single-thread performance by improving data  structures, etc. before using 
+    parallelism. This exercise will also help you understand the problem and the code.
+  - The final week of semester and the exam period will be an AI  contest using one or more 
+    of the online Antix systems you build.
+
+8. Getting help
+  - Use the github systems to submit bug reports, pull requests, etc.
+  - Your TA is Abbas Sadat [sas21@sfu.ca], and Autonomy Lab PhD student with relevant experience.
+    You can ask him anything except to do your project for you.
+  - Use the class mailing list cmpt-431-help@sfu.ca for questions and discussions.
+ 	- Ask Abbas and Richard questions via the mailing list so we can avoid duplicates, etc. Please 
+    reserve personal email only for private business.
