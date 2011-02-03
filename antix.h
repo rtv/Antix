@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <set>
+#include <list>
 #include <math.h> 
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,8 +81,14 @@ namespace Antix
 	 static double radius; // radius of all robot's bodies
 	 static double range;    // sensor detects objects up tp this maximum distance
 	 static double worldsize; // side length of the toroidal world
+	 
+
 	 static std::vector<Home*> homes;
 	 static std::vector<Robot*> population;
+	 
+	 static Robot* leftmost;
+	 static Robot* bottom;
+
 	 static uint64_t updates; // number of simulation steps so far	 
 	 static uint64_t updates_max; // number of simulation steps to run before quitting (0 means infinity)
 	 static unsigned int home_count; // number of home zones
@@ -102,9 +109,15 @@ namespace Antix
 	 void Draw();	 
 #endif
 	 
+	 // pointers to next robots sorted by axis
+	 Robot *left, *right, *up, *down;
+	 
 	 // deliver pucks to this location
 	 Home* home;
 	 
+	 static void SortX();
+	 static void SortY();
+
 		class Pose
 		{
 		public:

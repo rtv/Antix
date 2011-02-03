@@ -7,7 +7,7 @@
 
 #include <assert.h>
 #include <unistd.h>
-
+#include <algorithm>
 #include "antix.h"
 using namespace Antix;
 
@@ -22,12 +22,17 @@ double Robot::worldsize(1.0);
 std::vector<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
 std::vector<Robot::Puck> Robot::pucks;
+Robot* Robot::leftmost(NULL);
+Robot* Robot::bottom(NULL);
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 unsigned int Robot::home_count(1);
 unsigned int Robot::home_population( 20 );
 unsigned int Robot::puck_count(100);
 unsigned int Robot::sleep_msec( 10 );
+
+std::vector<Robot*> RobotsByX;
+std::vector<Robot*> RobotsByY;
 
 const char usage[] = "Antix understands these command line arguments:\n"
 	"  -? : Prints this helpful message.\n"
@@ -60,6 +65,16 @@ Robot::Robot( Home* home,
 {
   // add myself to the static vector of all robots
   population.push_back( this );
+  
+  // add myself to the left of the X list
+  left = NULL;
+  right = Robot::leftmost;
+  Robot::leftmost = this;
+  
+  // and the bottom of the Y list
+  down = NULL;
+  up = Robot::bottom;
+  Robot::bottom = this;
 }
 
 void Robot::Init( int argc, char** argv )
@@ -254,7 +269,7 @@ bool Robot::Drop()
 	 }
   return false; // nothing to drop  
 }
-
+  
 void Robot::UpdatePose()
 {
   // move according to the current speed 
@@ -265,13 +280,84 @@ void Robot::UpdatePose()
   pose.x = DistanceNormalize( pose.x + dx );
   pose.y = DistanceNormalize( pose.y + dy );
   pose.a = AngleNormalize( pose.a + da );
-
+  
+  
   // if we're carrying a puck, update it's position
   if( puck_held )
 	 {
 		puck_held->x = pose.x;
 		puck_held->y = pose.y;
 	 }
+}
+
+
+// insertion sort
+void Robot::SortX()
+{  
+  printf( "before sort\n" );
+  // iterate along the list to the right
+  for( Robot* a(Robot::leftmost); a; a = a->right )
+	 {
+		printf( "X:%.2f %p\n", a->pose.x, a );
+	 }
+  
+  // iterate along the list to the right
+  for( Robot* a(Robot::leftmost); a; a = a->right )
+	 {
+		Robot* b = a->right;
+		Robot* c = a;
+
+		// slide left until we find the right place for b 
+		while( c && (c->pose.x > b->pose.x) )
+		  {
+			 printf( "shifting c (c %p c->left %p)\n", c, c->left );
+			 c = c->left;			 
+		  }
+		
+		if( c != a ) // ie. b is not in the correct place
+		  {
+			 // remove b from current slot
+			 a->right = b->right;
+			 b->right->left = a;
+			 
+			 // insert it to the right of c
+			 b->left = c;
+
+			 if( c )
+				c->right = b;
+			 else
+				{
+				  b->right = leftmost;
+				  leftmost = b;
+				}
+			 
+			 
+		if( c == NULL )
+		  {
+
+			 b->right = leftmost;
+		  Robot::leftmost = 
+
+		if( c->right != b ) // b is not in the right place already
+		  {
+			 Robot* tmp = b->right;
+			 c->right = b;
+			 b->left = c;
+			 a->right = tmp;
+		  }
+	 }
+
+  printf( "after sort\n" );
+  // iterate along the list to the right
+  for( Robot* a(Robot::leftmost); a; a = a->right )
+	 {
+		printf( "X:%.2f %p\n", a->pose.x, a );
+	 }
+}
+
+// insertion sort
+void Robot::SortY()
+{  
 }
 
 void Robot::UpdateAll()
@@ -284,6 +370,9 @@ void Robot::UpdateAll()
 		{
 			FOR_EACH( r, population )
 				(*r)->UpdatePose();
+
+			SortX();
+			SortY();
 
 			FOR_EACH( r, population )
 				(*r)->UpdateSensors();
