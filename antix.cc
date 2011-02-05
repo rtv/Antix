@@ -11,7 +11,7 @@
 #include "antix.h"
 using namespace Antix;
 
-unsigned int Robot::mbits( 4 );
+unsigned int Robot::mbits( 3 );
 
 // initialize static members
 bool Robot::paused( false );
@@ -166,6 +166,23 @@ void Robot::Init( int argc, char** argv )
 #endif // GRAPHICS
 }
 
+inline unsigned int Cell( double x, double y )
+{
+  double d = Robot::worldsize / (double)(1<<Robot::mbits);
+  
+  unsigned int cx( floor( x / d ));
+  unsigned int cy( floor( y / d ));
+  
+  const unsigned int i(cx + (cy << Robot::mbits) );
+  
+  //printf( "(%.2f %.2f) [%u %u]=> %u\n", x, y, cx, cy, i );	 
+
+  assert( i < ((1<<Robot::mbits) * (1<<Robot::mbits)));
+
+  return i;
+}
+
+
 void Robot::UpdateSensors()
 {
   see_robots.clear();
@@ -216,70 +233,35 @@ void Robot::UpdateSensors()
 #else  
   
   neighbors.clear();
-
-  for( Robot* l=left; l && pose.x - l->pose.x < Robot::range; l=l->left )
-	 {
-		bool found(false);
-
-		for( Robot* d=down; d && pose.y - d->pose.y < Robot::range; d=d->down )
-		  if( l == d )
-			 {
-				found=true;
-				break;
-			 }
-		
-		for( Robot* u=up; u && u->pose.y - pose.y < Robot::range; u=u->up )
-		  if( l == u )
-			 {
-				found=true;
-				break;
-			 }
-		
-		if( found )
-		  neighbors.push_back( l );    
-	 }
-  
-  
-  for( Robot* r=right; r && r->pose.x - pose.x < Robot::range; r=r->right )
-	 {
-		bool found(false);
-		
-		for( Robot* d=down; d && pose.y - d->pose.y < Robot::range; d=d->down )
-		  if( r == d )
-			 {
-				found=true;
-				break;
-			 }
-		
-		for( Robot* u=up; u && u->pose.y - pose.y < Robot::range; u=u->up )
-		  if( r == u )
-			 {
-				found=true;
-				break;
-			 }
-		
-		if( found )
-		  neighbors.push_back( r );    
-	 }
-    
-  
-  // check all the neighbors for FOV and hypot distance
-  FOR_EACH( it, neighbors )  
+ // check every robot in the world to see if it is detected
+  FOR_EACH( it, matrix[Cell(pose.x, pose.y)] )
     {
       Robot* other = *it;
-		double dx( WrapDistance( other->pose.x - pose.x ) );
-		double dy( WrapDistance( other->pose.y - pose.y ) );				
+			
+      // discard if it's the same robot
+      if( other == this )
+				continue;
+			
+      // discard if it's out of range. We put off computing the
+      // hypotenuse as long as we can, as it's relatively expensive.
 		
+      double dx( WrapDistance( other->pose.x - pose.x ) );
+			if( fabs(dx) > Robot::range )
+				continue; // out of range
+			
+      double dy( WrapDistance( other->pose.y - pose.y ) );		
+			if( fabs(dy) > Robot::range )
+				continue; // out of range
+			
+      double range = hypot( dx, dy );
+      if( range > Robot::range ) 
+				continue; 
+			
       // discard if it's out of field of view 
       double absolute_heading = atan2( dy, dx );
       double relative_heading = AngleNormalize((absolute_heading - pose.a) );
       if( fabs(relative_heading) > fov/2.0   ) 
 		  continue; 
-		
-		// check the range
-      double range = hypot( dx, dy );
-      if( range > Robot::range ) 
-		  continue; 		
 		
 		see_robots.push_back( SeeRobot( other->home,
 												  other->pose, 
@@ -287,6 +269,8 @@ void Robot::UpdateSensors()
 												  range, 
 												  relative_heading,
 												  other->Holding() ) );			
+
+		neighbors.push_back( other );
     }	
 #endif      
   
@@ -360,21 +344,6 @@ bool Robot::Drop()
   return false; // nothing to drop  
 }
 
-unsigned int Cell( double x, double y )
-{
-  double d = Robot::worldsize / (double)(1<<Robot::mbits);
-  
-  unsigned int cx( floor( x / d ));
-  unsigned int cy( floor( y / d ));
-  
-  const unsigned int i(cx + (cy << Robot::mbits) );
-  
-  //printf( "(%.2f %.2f) [%u %u]=> %u\n", x, y, cx, cy, i );	 
-
-  assert( i < ((1<<Robot::mbits) * (1<<Robot::mbits)));
-
-  return i;
-}
 
 void Robot::UpdatePose()
 {
