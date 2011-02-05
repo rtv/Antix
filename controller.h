@@ -1,8 +1,6 @@
 
 #include "antix.h"
 
-static double xx(0.0);
-
 // this is the robot controller code
 class Forager : public Antix::Robot
 {

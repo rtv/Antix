@@ -131,6 +131,22 @@ void Robot::DrawAll()
 	  }
 	glEnd();
 #endif
+
+	// draw the matrix 
+	double d = worldsize / (double)(1<<mbits);
+
+	glBegin( GL_LINES );
+	for( int x(0); x < (1<<mbits); x++ )
+	  {
+		 glVertex2f( x*d, 0 );
+		 glVertex2f( x*d, worldsize );
+	  }
+	for( int y(0); y < (1<<mbits); y++ )
+	  {
+		 glVertex2f( 0, y*d );
+		 glVertex2f( worldsize, y*d );
+	  }
+	glEnd();
 }
 
 // draw a robot

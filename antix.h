@@ -98,6 +98,11 @@ namespace Antix
 
 	 static Robot* first;
 
+	 static std::vector<std::set<Robot*> > matrix;
+	 static unsigned int mbits;
+
+	 unsigned int index; // the matrix cell that currently holds this robot
+
 #if GRAPHICS
 	 static int winsize; // initial size of the window in pixels
 
@@ -209,7 +214,7 @@ namespace Antix
 /* 	 std::set<Robot*> up_set; */
 /* 	 std::set<Robot*> down_set; */
 	 
-	 std::set<Robot*> neighbors;
+	 std::vector<Robot*> neighbors;
 
 	 // constructor
 	 Robot( Home* home, const Pose& pose );

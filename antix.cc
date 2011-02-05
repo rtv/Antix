@@ -11,6 +11,8 @@
 #include "antix.h"
 using namespace Antix;
 
+unsigned int Robot::mbits( 4 );
+
 // initialize static members
 bool Robot::paused( false );
 bool Robot::show_data( false );
@@ -30,7 +32,7 @@ unsigned int Robot::home_count(1);
 unsigned int Robot::home_population( 20 );
 unsigned int Robot::puck_count(100);
 unsigned int Robot::sleep_msec( 10 );
-
+std::vector<std::set<Robot*> > Robot::matrix( (1<<Robot::mbits) * (1<<Robot::mbits) );
 std::vector<Robot*> RobotsByX;
 std::vector<Robot*> RobotsByY;
 
@@ -63,7 +65,8 @@ Robot::Robot( Home* home,
 	 speed(),
 	 see_robots(),
 	 see_pucks(),
-	 puck_held(NULL)
+	 puck_held(NULL),
+	 index(0)
 {
   // add myself to the static vector of all robots
   population.push_back( this );
@@ -171,7 +174,7 @@ void Robot::UpdateSensors()
 	// note: the following two large Fsensing operations could safely be
 	// done in parallel since they do not modify any common data
 
-#if 0	
+#if 0
   // first fill the robot sensor
   // check every robot in the world to see if it is detected
   FOR_EACH( it, population )
@@ -211,27 +214,57 @@ void Robot::UpdateSensors()
 																			other->Holding() ) );			
     }	
 #else  
-
-  std::set<Robot*> xneighbors, yneighbors;
-
-  for( Robot* l=left; l && pose.x - l->pose.x < Robot::range; l=l->left )
-	 xneighbors.insert( l );
-  for( Robot* r=right; r && r->pose.x - pose.x < Robot::range; r=r->right )
-	 xneighbors.insert( r );
-  
-  for( Robot* d=down; d && pose.y - d->pose.y < Robot::range; d=d->down )
-	 yneighbors.insert( d );
-  for( Robot* u=up; u && u->pose.y - pose.y < Robot::range; u=u->up )
-	 yneighbors.insert( u );    
   
   neighbors.clear();
-  std::set_intersection( xneighbors.begin(), xneighbors.end(),
- 								 yneighbors.begin(), yneighbors.end(),
- 								 std::inserter( neighbors, neighbors.end() ) );
 
+  for( Robot* l=left; l && pose.x - l->pose.x < Robot::range; l=l->left )
+	 {
+		bool found(false);
 
+		for( Robot* d=down; d && pose.y - d->pose.y < Robot::range; d=d->down )
+		  if( l == d )
+			 {
+				found=true;
+				break;
+			 }
+		
+		for( Robot* u=up; u && u->pose.y - pose.y < Robot::range; u=u->up )
+		  if( l == u )
+			 {
+				found=true;
+				break;
+			 }
+		
+		if( found )
+		  neighbors.push_back( l );    
+	 }
+  
+  
+  for( Robot* r=right; r && r->pose.x - pose.x < Robot::range; r=r->right )
+	 {
+		bool found(false);
+		
+		for( Robot* d=down; d && pose.y - d->pose.y < Robot::range; d=d->down )
+		  if( r == d )
+			 {
+				found=true;
+				break;
+			 }
+		
+		for( Robot* u=up; u && u->pose.y - pose.y < Robot::range; u=u->up )
+		  if( r == u )
+			 {
+				found=true;
+				break;
+			 }
+		
+		if( found )
+		  neighbors.push_back( r );    
+	 }
+    
+  
   // check all the neighbors for FOV and hypot distance
-  FOR_EACH( it, neighbors )
+  FOR_EACH( it, neighbors )  
     {
       Robot* other = *it;
 		double dx( WrapDistance( other->pose.x - pose.x ) );
@@ -326,7 +359,23 @@ bool Robot::Drop()
 	 }
   return false; // nothing to drop  
 }
+
+unsigned int Cell( double x, double y )
+{
+  double d = Robot::worldsize / (double)(1<<Robot::mbits);
   
+  unsigned int cx( floor( x / d ));
+  unsigned int cy( floor( y / d ));
+  
+  const unsigned int i(cx + (cy << Robot::mbits) );
+  
+  //printf( "(%.2f %.2f) [%u %u]=> %u\n", x, y, cx, cy, i );	 
+
+  assert( i < ((1<<Robot::mbits) * (1<<Robot::mbits)));
+
+  return i;
+}
+
 void Robot::UpdatePose()
 {
   // move according to the current speed 
@@ -337,7 +386,15 @@ void Robot::UpdatePose()
   pose.x = DistanceNormalize( pose.x + dx );
   pose.y = DistanceNormalize( pose.y + dy );
   pose.a = AngleNormalize( pose.a + da );
+    
+  unsigned int newindex = Cell( pose.x, pose.y );
   
+  if( newindex != index )
+	 {
+		matrix[index].erase( this );
+		matrix[newindex].insert( this );		
+		index = newindex;
+	 }
   
   // if we're carrying a puck, update it's position
   if( puck_held )
