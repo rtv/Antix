@@ -109,6 +109,28 @@ void Robot::DrawAll()
 	FOR_EACH( p, pucks )
 		glVertex2f( p->x, p->y );
 	glEnd();
+
+#if 0
+	// draw the sorted lists
+	glColor3f( 1,0,0 );
+	glBegin( GL_LINE_STRIP );
+	for( Robot* r = Robot::leftmost; r; r=r->right )
+	  {
+		 //printf( "%.2f %.2f\n", r->pose.x, r->pose.y );
+		 glVertex2f( r->pose.x, r->pose.y );
+	  }
+	glEnd();
+
+	// draw the sorted lists
+	glColor3f( 0,1,0 );
+	glBegin( GL_LINE_STRIP );
+	for( Robot* r = Robot::downmost; r; r=r->up )
+	  {
+		 //printf( "%.2f %.2f\n", r->pose.x, r->pose.y );
+		 glVertex2f( r->pose.x, r->pose.y );
+	  }
+	glEnd();
+#endif
 }
 
 // draw a robot
@@ -149,7 +171,7 @@ void Robot::Draw()
 
   if( Robot::show_data )
 	 {
-		glColor3f( 1,0,0 ); // red
+		glColor3f( 0,0,1 ); // blue
 		
 		FOR_EACH( it, see_robots )
 		  {
@@ -162,8 +184,9 @@ void Robot::Draw()
 				glEnd();
 		  }
 		
+
+#if 0		
 		glColor3f( 0.3,0.8,0.3 ); // light green
-		
 		FOR_EACH( it, see_pucks )
 		  {
 				float dx = it->range * cos(it->bearing);
@@ -174,6 +197,7 @@ void Robot::Draw()
 				glVertex2f( dx, dy );
 				glEnd();
 		  }
+#endif
 		
 		glColor3f( 0.4,0.4,0.4 ); // grey
 
@@ -193,10 +217,49 @@ void Robot::Draw()
 						sin(left) * range );
 		
 		glEnd();		
+
+		
 	 }
 	
 	// shift out of local coordinate frame
   glPopMatrix();
+
+  if( first == this )
+	 {
+		
+		glColor3f( 1,1,0 );
+
+		//		GlDrawCircle( pose.x, pose.y, Robot::range, 32 );
+
+		double ep = Robot::range;
+
+		glBegin( GL_LINE_LOOP );
+		glVertex2f( pose.x+ep, pose.y+ep );
+		glVertex2f( pose.x-ep, pose.y+ep );
+		glVertex2f( pose.x-ep, pose.y-ep );
+		glVertex2f( pose.x+ep, pose.y-ep );
+		glEnd();  
+
+		ep = 0.02;
+
+		glBegin( GL_LINE_LOOP );
+		glVertex2f( pose.x+ep, pose.y+ep );
+		glVertex2f( pose.x-ep, pose.y+ep );
+		glVertex2f( pose.x-ep, pose.y-ep );
+		glVertex2f( pose.x+ep, pose.y-ep );
+		glEnd();  
+		
+		glColor3f( 1,0,1 );
+		FOR_EACH( it, neighbors )
+		  {
+			 glBegin( GL_LINE_LOOP );
+			 glVertex2f( (*it)->pose.x+ep, (*it)->pose.y+ep );
+			 glVertex2f( (*it)->pose.x-ep, (*it)->pose.y+ep );
+			 glVertex2f( (*it)->pose.x-ep, (*it)->pose.y-ep );
+			 glVertex2f( (*it)->pose.x+ep, (*it)->pose.y-ep );
+			 glEnd();  
+		  }
+	 }
 }
 
 #endif // GRAPHICS

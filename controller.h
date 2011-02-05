@@ -1,6 +1,8 @@
 
 #include "antix.h"
 
+static double xx(0.0);
+
 // this is the robot controller code
 class Forager : public Antix::Robot
 {
@@ -8,7 +10,7 @@ class Forager : public Antix::Robot
   double lastx, lasty;  
   
  Forager( Antix::Home* h ) 
-	 : Robot( h, Pose::Random() ), 
+	: Robot( h, Pose::Random()), 
 		lastx(home->x), // initial search location is close to my home
 		lasty(home->y)
 			{}

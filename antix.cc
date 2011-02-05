@@ -23,7 +23,7 @@ std::vector<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
 std::vector<Robot::Puck> Robot::pucks;
 Robot* Robot::leftmost(NULL);
-Robot* Robot::bottom(NULL);
+Robot* Robot::downmost(NULL);
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 unsigned int Robot::home_count(1);
@@ -33,6 +33,8 @@ unsigned int Robot::sleep_msec( 10 );
 
 std::vector<Robot*> RobotsByX;
 std::vector<Robot*> RobotsByY;
+
+Robot* Robot::first(NULL);
 
 const char usage[] = "Antix understands these command line arguments:\n"
 	"  -? : Prints this helpful message.\n"
@@ -55,13 +57,13 @@ Home::Home( const Color& color, double x, double y, double r )
 
 
 Robot::Robot( Home* home,
-							const Pose& pose )
+				  const Pose& pose )
   : home(home),
-	  pose(pose),
-		speed(),
-		see_robots(),
-		see_pucks(),
-		puck_held(NULL)
+	 pose(pose),
+	 speed(),
+	 see_robots(),
+	 see_pucks(),
+	 puck_held(NULL)
 {
   // add myself to the static vector of all robots
   population.push_back( this );
@@ -69,18 +71,24 @@ Robot::Robot( Home* home,
   // add myself to the left of the X list
   left = NULL;
   right = Robot::leftmost;
+  if( right ) right->left = this;
   Robot::leftmost = this;
   
-  // and the bottom of the Y list
+  // and the downmost of the Y list
   down = NULL;
-  up = Robot::bottom;
-  Robot::bottom = this;
+  up = Robot::downmost;
+  if( up) up->down = this;
+  Robot::downmost = this;
+
+  if( ! first )
+	 first = this;
 }
 
 void Robot::Init( int argc, char** argv )
 {
   // seed the random number generator with the current time
-  srand48(time(NULL));
+  //srand48(time(NULL));
+  srand48(0); // for debugging - start the same every time
 	
   // parse arguments to configure Robot static members
 	int c;
@@ -162,7 +170,8 @@ void Robot::UpdateSensors()
   
 	// note: the following two large Fsensing operations could safely be
 	// done in parallel since they do not modify any common data
-	
+
+#if 0	
   // first fill the robot sensor
   // check every robot in the world to see if it is detected
   FOR_EACH( it, population )
@@ -201,9 +210,56 @@ void Robot::UpdateSensors()
 																			relative_heading,
 																			other->Holding() ) );			
     }	
-	
+#else  
+
+  std::set<Robot*> xneighbors, yneighbors;
+
+  for( Robot* l=left; l && pose.x - l->pose.x < Robot::range; l=l->left )
+	 xneighbors.insert( l );
+  for( Robot* r=right; r && r->pose.x - pose.x < Robot::range; r=r->right )
+	 xneighbors.insert( r );
+  
+  for( Robot* d=down; d && pose.y - d->pose.y < Robot::range; d=d->down )
+	 yneighbors.insert( d );
+  for( Robot* u=up; u && u->pose.y - pose.y < Robot::range; u=u->up )
+	 yneighbors.insert( u );    
+  
+  neighbors.clear();
+  std::set_intersection( xneighbors.begin(), xneighbors.end(),
+ 								 yneighbors.begin(), yneighbors.end(),
+ 								 std::inserter( neighbors, neighbors.end() ) );
+
+
+  // check all the neighbors for FOV and hypot distance
+  FOR_EACH( it, neighbors )
+    {
+      Robot* other = *it;
+		double dx( WrapDistance( other->pose.x - pose.x ) );
+		double dy( WrapDistance( other->pose.y - pose.y ) );				
+		
+      // discard if it's out of field of view 
+      double absolute_heading = atan2( dy, dx );
+      double relative_heading = AngleNormalize((absolute_heading - pose.a) );
+      if( fabs(relative_heading) > fov/2.0   ) 
+		  continue; 
+		
+		// check the range
+      double range = hypot( dx, dy );
+      if( range > Robot::range ) 
+		  continue; 		
+		
+		see_robots.push_back( SeeRobot( other->home,
+												  other->pose, 
+												  other->speed, 
+												  range, 
+												  relative_heading,
+												  other->Holding() ) );			
+    }	
+#endif      
+  
   // next fill the puck sensor
   // check every puck in the world to see if it is detected
+#if 1
   FOR_EACH( it, pucks )
     {      
       // discard if it's out of range. We put off computing the
@@ -233,6 +289,7 @@ void Robot::UpdateSensors()
 																		relative_heading,
 																		it->held));
 		}		
+#endif
 }
 
 bool Robot::Pickup()
@@ -291,74 +348,109 @@ void Robot::UpdatePose()
 }
 
 
-// insertion sort
-void Robot::SortX()
+// in-place insertion sort
+inline void Robot::SortX()
 {  
-  printf( "before sort\n" );
   // iterate along the list to the right
-  for( Robot* a(Robot::leftmost); a; a = a->right )
-	 {
-		printf( "X:%.2f %p\n", a->pose.x, a );
-	 }
-  
-  // iterate along the list to the right
-  for( Robot* a(Robot::leftmost); a; a = a->right )
+  for( Robot* a(Robot::leftmost); a->right;  )
 	 {
 		Robot* b = a->right;
 		Robot* c = a;
-
+		
+		// 		printf( "before shift\n" );
+		// 		// iterate along the list to the right
+		// 		for( Robot* z(Robot::leftmost); z; z = z->right )
+		// 		  {
+		// 			 printf( "X:%.2f %p (l:%p r:%p) %s%s%s\n", z->pose.x, z, z->left, z->right, 
+		// 						z == a ? "a" : "", 
+		// 						z == b ? "b" : "",
+		// 						z == c ? "c" : "" );
+		// 		  }		
+		
 		// slide left until we find the right place for b 
 		while( c && (c->pose.x > b->pose.x) )
-		  {
-			 printf( "shifting c (c %p c->left %p)\n", c, c->left );
-			 c = c->left;			 
-		  }
+		  c = c->left;			 
 		
 		if( c != a ) // ie. b is not in the correct place
-		  {
+		  {			 
 			 // remove b from current slot
-			 a->right = b->right;
-			 b->right->left = a;
+			 a->right = b->right;			 
+			 if( b->right )
+				b->right->left = a;
 			 
 			 // insert it to the right of c
 			 b->left = c;
-
+			 
 			 if( c )
-				c->right = b;
+				{
+				  b->right = c->right;
+				  b->right->left = b;
+				  c->right = b;				  
+				}			
 			 else
 				{
-				  b->right = leftmost;
+				  b->right = leftmost;				
+				  leftmost->left = b;
 				  leftmost = b;
-				}
-			 
-			 
-		if( c == NULL )
-		  {
-
-			 b->right = leftmost;
-		  Robot::leftmost = 
-
-		if( c->right != b ) // b is not in the right place already
-		  {
-			 Robot* tmp = b->right;
-			 c->right = b;
-			 b->left = c;
-			 a->right = tmp;
+				}			 
 		  }
-	 }
-
-  printf( "after sort\n" );
-  // iterate along the list to the right
-  for( Robot* a(Robot::leftmost); a; a = a->right )
-	 {
-		printf( "X:%.2f %p\n", a->pose.x, a );
+		else
+		  a = a->right;
 	 }
 }
 
-// insertion sort
-void Robot::SortY()
+// in-place insertion sort
+inline void Robot::SortY()
 {  
+  // iterate along the list to the up
+  for( Robot* a(Robot::downmost); a->up;  )
+	 {
+		Robot* b = a->up;
+		Robot* c = a;
+		
+		// 		printf( "before shift\n" );
+		// 		// iterate along the list to the up
+		// 		for( Robot* z(Robot::downmost); z; z = z->up )
+		// 		  {
+		// 			 printf( "X:%.2f %p (l:%p r:%p) %s%s%s\n", z->pose.x, z, z->down, z->up, 
+		// 						z == a ? "a" : "", 
+		// 						z == b ? "b" : "",
+		// 						z == c ? "c" : "" );
+		// 		  }		
+		
+		// slide down until we find the up place for b 
+		while( c && (c->pose.y > b->pose.y) )
+		  c = c->down;			 
+		
+		if( c != a ) // ie. b is not in the correct place
+		  {			 
+			 // remove b from current slot
+			 a->up = b->up;			 
+			 if( b->up )
+				b->up->down = a;
+			 
+			 // insert it to the up of c
+			 b->down = c;
+			 
+			 if( c )
+				{
+				  b->up = c->up;
+				  b->up->down = b;
+				  c->up = b;				  
+				}			
+			 else
+				{
+				  b->up = downmost;				
+				  downmost->down = b;
+				  downmost = b;
+				}			 
+		  }
+		else
+		  a = a->up;
+	 }
 }
+
+
 
 void Robot::UpdateAll()
 {

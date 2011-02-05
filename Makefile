@@ -10,16 +10,17 @@
 GLUTFLAGS = -framework OpenGL -framework GLUT
 
 CC = g++
-CXXFLAGS = -g -Wall -O3 $(GLUTFLAGS)
+CXXFLAGS = -g -O3 -Wall $(GLUTFLAGS)
 LIBS =  -g -lm $(GLUTLIBS)
 
-SRC = antix.h antix.cc controller.cc gui.cc main.cc 
+HDR = antix.h controller.h
+SRC = antix.cc controller.cc gui.cc main.cc 
 
 all: antix
 
-antix: $(SRC)
+antix: $(SRC) $(HDR)
 	$(CC) $(CXXFLAGS) $(LIBS) -o $@ $(SRC) 
 
 clean:
-	rm *.o antix
+	rm -f *.o antix
 

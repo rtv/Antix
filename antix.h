@@ -87,7 +87,7 @@ namespace Antix
 	 static std::vector<Robot*> population;
 	 
 	 static Robot* leftmost;
-	 static Robot* bottom;
+	 static Robot* downmost;
 
 	 static uint64_t updates; // number of simulation steps so far	 
 	 static uint64_t updates_max; // number of simulation steps to run before quitting (0 means infinity)
@@ -95,6 +95,8 @@ namespace Antix
 	 static unsigned int home_population; // number of robots
 	 static unsigned int puck_count; // number of pucks that exist in the world
 	 static unsigned int sleep_msec; // number of milliseconds to sleep at each update
+
+	 static Robot* first;
 
 #if GRAPHICS
 	 static int winsize; // initial size of the window in pixels
@@ -125,6 +127,8 @@ namespace Antix
 			
 		Pose( double x, double y, double a ) : x(x), y(y), a(a) {}
 		Pose() : x(0.0), y(0.0), a(0.0) {}
+
+			//Pose( const Pose &p ) : x(p.x), y(p.y), a(p.a) {}	
 			
 			// get a random pose 
 			static Pose Random()
@@ -199,7 +203,14 @@ namespace Antix
 			 detected in my field of view */
 	 std::vector<SeePuck> see_pucks;	 
 	 
-	 	 
+/* 	 std::set<Robot*> left_set; */
+/* 	 std::set<Robot*> right_set; */
+
+/* 	 std::set<Robot*> up_set; */
+/* 	 std::set<Robot*> down_set; */
+	 
+	 std::set<Robot*> neighbors;
+
 	 // constructor
 	 Robot( Home* home, const Pose& pose );
 	 
