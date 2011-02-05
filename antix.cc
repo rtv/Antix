@@ -11,7 +11,7 @@
 #include "antix.h"
 using namespace Antix;
 
-unsigned int Robot::mbits( 3 );
+unsigned int Robot::matrixwidth( 100 );
 
 // initialize static members
 bool Robot::paused( false );
@@ -23,19 +23,16 @@ double Robot::range( 0.1 );
 double Robot::worldsize(1.0);
 std::vector<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
-std::vector<Robot::Puck> Robot::pucks;
-Robot* Robot::leftmost(NULL);
-Robot* Robot::downmost(NULL);
+std::vector<Robot::Puck*> Robot::pucks;
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 unsigned int Robot::home_count(1);
 unsigned int Robot::home_population( 20 );
 unsigned int Robot::puck_count(100);
 unsigned int Robot::sleep_msec( 10 );
-std::vector<std::set<Robot*> > Robot::matrix( (1<<Robot::mbits) * (1<<Robot::mbits) );
-std::vector<Robot*> RobotsByX;
-std::vector<Robot*> RobotsByY;
+std::vector<Robot::MatrixCell> Robot::matrix( Robot::matrixwidth * Robot::matrixwidth );
 
+unsigned int Robot::gui_interval(100);
 Robot* Robot::first(NULL);
 
 const char usage[] = "Antix understands these command line arguments:\n"
@@ -61,28 +58,16 @@ Home::Home( const Color& color, double x, double y, double r )
 Robot::Robot( Home* home,
 				  const Pose& pose )
   : home(home),
-	 pose(pose),
-	 speed(),
-	 see_robots(),
-	 see_pucks(),
-	 puck_held(NULL),
-	 index(0)
+		pose(pose),
+		speed(),
+		see_pucks(),
+		see_robots(),
+		index(0),
+		puck_held(NULL)
 {
   // add myself to the static vector of all robots
   population.push_back( this );
   
-  // add myself to the left of the X list
-  left = NULL;
-  right = Robot::leftmost;
-  if( right ) right->left = this;
-  Robot::leftmost = this;
-  
-  // and the downmost of the Y list
-  down = NULL;
-  up = Robot::downmost;
-  if( up) up->down = this;
-  Robot::downmost = this;
-
   if( ! first )
 	 first = this;
 }
@@ -90,12 +75,12 @@ Robot::Robot( Home* home,
 void Robot::Init( int argc, char** argv )
 {
   // seed the random number generator with the current time
-  //srand48(time(NULL));
-  srand48(0); // for debugging - start the same every time
+  srand48(time(NULL));
+  //srand48(0); // for debugging - start the same every time
 	
   // parse arguments to configure Robot static members
 	int c;
-	while( ( c = getopt( argc, argv, "?dh:a:p:s:f:r:c:u:z:w:")) != -1 )
+	while( ( c = getopt( argc, argv, "?dh:a:p:s:f:g:r:c:u:z:w:")) != -1 )
 		switch( c )
 			{
 			case 'h':
@@ -123,6 +108,11 @@ void Robot::Init( int argc, char** argv )
 				printf( "[Antix] fov: %.2f\n", fov );
 				break;
 				
+      case 'g':
+				gui_interval = atol( optarg );
+				printf( "[Antix] gui_interval: %lu\n", (long unsigned)gui_interval );
+				break;
+
 			case 'r': 
 				range = atof( optarg );
 				printf( "[Antix] range: %.2f\n", range );
@@ -159,52 +149,29 @@ void Robot::Init( int argc, char** argv )
 			}
 	
 	for( unsigned int i=0; i<puck_count; i++ )
-	  pucks.push_back( Puck() );	
+	  pucks.push_back( new Puck() );	
+	
 	
 #if GRAPHICS
 	InitGraphics( argc, argv );
 #endif // GRAPHICS
 }
 
-inline unsigned int Cell( double x, double y )
+void Robot::TestRobotsInCell( const MatrixCell& cell )
 {
-  double d = Robot::worldsize / (double)(1<<Robot::mbits);
-  
-  unsigned int cx( floor( x / d ));
-  unsigned int cy( floor( y / d ));
-  
-  const unsigned int i(cx + (cy << Robot::mbits) );
-  
-  //printf( "(%.2f %.2f) [%u %u]=> %u\n", x, y, cx, cy, i );	 
-
-  assert( i < ((1<<Robot::mbits) * (1<<Robot::mbits)));
-
-  return i;
-}
-
-
-void Robot::UpdateSensors()
-{
-  see_robots.clear();
-  see_pucks.clear();
-  
-	// note: the following two large Fsensing operations could safely be
-	// done in parallel since they do not modify any common data
-
-#if 0
-  // first fill the robot sensor
-  // check every robot in the world to see if it is detected
-  FOR_EACH( it, population )
-    {
+	FOR_EACH( it, cell.robots )
+		{
       Robot* other = *it;
 			
       // discard if it's the same robot
       if( other == this )
 				continue;
 			
+			//neighbors.push_back( other );
+			
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
-		
+			
       double dx( WrapDistance( other->pose.x - pose.x ) );
 			if( fabs(dx) > Robot::range )
 				continue; // out of range
@@ -228,28 +195,27 @@ void Robot::UpdateSensors()
 																			other->speed, 
 																			range, 
 																			relative_heading,
-																			other->Holding() ) );			
-    }	
-#else  
-  
-  neighbors.clear();
- // check every robot in the world to see if it is detected
-  FOR_EACH( it, matrix[Cell(pose.x, pose.y)] )
-    {
-      Robot* other = *it;
-			
-      // discard if it's the same robot
-      if( other == this )
-				continue;
-			
+																			other->Holding() ) );						
+    }
+}	
+
+void Robot::TestPucksInCell( const MatrixCell& cell )
+{
+
+  FOR_EACH( it, cell.pucks )
+    {      
+      Puck* puck = *it;
+
+			//neighbor_pucks.push_back( puck );
+
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 		
-      double dx( WrapDistance( other->pose.x - pose.x ) );
+      double dx( WrapDistance( puck->x - pose.x ) );
 			if( fabs(dx) > Robot::range )
 				continue; // out of range
 			
-      double dy( WrapDistance( other->pose.y - pose.y ) );		
+      double dy( WrapDistance( puck->y - pose.y ) );		
 			if( fabs(dy) > Robot::range )
 				continue; // out of range
 			
@@ -261,52 +227,47 @@ void Robot::UpdateSensors()
       double absolute_heading = atan2( dy, dx );
       double relative_heading = AngleNormalize((absolute_heading - pose.a) );
       if( fabs(relative_heading) > fov/2.0   ) 
-		  continue; 
-		
-		see_robots.push_back( SeeRobot( other->home,
-												  other->pose, 
-												  other->speed, 
-												  range, 
-												  relative_heading,
-												  other->Holding() ) );			
-
-		neighbors.push_back( other );
-    }	
-#endif      
-  
-  // next fill the puck sensor
-  // check every puck in the world to see if it is detected
-#if 1
-  FOR_EACH( it, pucks )
-    {      
-      // discard if it's out of range. We put off computing the
-      // hypotenuse as long as we can, as it's relatively expensive.
-		
-      double dx( WrapDistance( it->x - pose.x ) );
-		if( fabs(dx) > Robot::range )
-		  continue; // out of range
-		
-      double dy( WrapDistance( it->y - pose.y ) );		
-		if( fabs(dy) > Robot::range )
-		  continue; // out of range
-		
-      double range = hypot( dx, dy );
-      if( range > Robot::range ) 
-		  continue; 
-		
-      // discard if it's out of field of view 
-      double absolute_heading = atan2( dy, dx );
-      double relative_heading = AngleNormalize((absolute_heading - pose.a) );
-      if( fabs(relative_heading) > fov/2.0   ) 
-		  continue; 
+				continue; 
 		
 			// passes all the tests, so we record a puck detection in the
 			// vector
-			see_pucks.push_back( SeePuck( &(*it), range, 
+			see_pucks.push_back( SeePuck( puck, range, 
 																		relative_heading,
-																		it->held));
+																		puck->held));
 		}		
-#endif
+}
+
+void Robot::UpdateSensors()
+{
+  see_robots.clear();
+  see_pucks.clear();
+  
+	// note: the following two large sensing operations could safely be
+	// done in parallel since they do not modify any common data
+  
+  neighbors.clear();
+	neighbor_pucks.clear();
+	neighbor_cells.clear();
+
+	// check every robot in the world to see if it is detected
+	double dcell = worldsize / (double)matrixwidth;
+	
+	unsigned int xmin( Cell(pose.x - range));
+	unsigned int xmax( Cell(pose.x + range));
+	unsigned int ymin( Cell(pose.y - range));
+	unsigned int ymax( Cell(pose.y + range));
+
+	for( unsigned int x(xmin); x <= xmax; ++x ) 
+		for( unsigned int y(ymin); y <= ymax; ++y ) 
+			{
+				const unsigned int index(x + (y * Robot::matrixwidth) );		 
+								
+				//if( this == first ) printf( "test (%.2f,%.2f) cell %u\n", x, y, Cell(x,y));
+				//neighbor_cells.insert( index );
+				TestRobotsInCell( matrix[index] );
+				TestPucksInCell( matrix[index] );
+			}
+	//if( this == first ) puts("");
 }
 
 bool Robot::Pickup()
@@ -357,124 +318,29 @@ void Robot::UpdatePose()
   pose.a = AngleNormalize( pose.a + da );
     
   unsigned int newindex = Cell( pose.x, pose.y );
-  
-  if( newindex != index )
-	 {
-		matrix[index].erase( this );
-		matrix[newindex].insert( this );		
-		index = newindex;
-	 }
-  
-  // if we're carrying a puck, update it's position
+ 
+ // if we're carrying a puck, update it's position
   if( puck_held )
 	 {
 		puck_held->x = pose.x;
 		puck_held->y = pose.y;
 	 }
+	
+  if( newindex != index )
+		{
+			matrix[index].robots.erase( this );
+			matrix[newindex].robots.insert( this );		
+			
+			if( puck_held )
+				{
+					matrix[index].pucks.erase( puck_held );
+					matrix[newindex].pucks.insert( puck_held );		
+				}
+			
+			index = newindex;
+		}
 }
 
-
-// in-place insertion sort
-inline void Robot::SortX()
-{  
-  // iterate along the list to the right
-  for( Robot* a(Robot::leftmost); a->right;  )
-	 {
-		Robot* b = a->right;
-		Robot* c = a;
-		
-		// 		printf( "before shift\n" );
-		// 		// iterate along the list to the right
-		// 		for( Robot* z(Robot::leftmost); z; z = z->right )
-		// 		  {
-		// 			 printf( "X:%.2f %p (l:%p r:%p) %s%s%s\n", z->pose.x, z, z->left, z->right, 
-		// 						z == a ? "a" : "", 
-		// 						z == b ? "b" : "",
-		// 						z == c ? "c" : "" );
-		// 		  }		
-		
-		// slide left until we find the right place for b 
-		while( c && (c->pose.x > b->pose.x) )
-		  c = c->left;			 
-		
-		if( c != a ) // ie. b is not in the correct place
-		  {			 
-			 // remove b from current slot
-			 a->right = b->right;			 
-			 if( b->right )
-				b->right->left = a;
-			 
-			 // insert it to the right of c
-			 b->left = c;
-			 
-			 if( c )
-				{
-				  b->right = c->right;
-				  b->right->left = b;
-				  c->right = b;				  
-				}			
-			 else
-				{
-				  b->right = leftmost;				
-				  leftmost->left = b;
-				  leftmost = b;
-				}			 
-		  }
-		else
-		  a = a->right;
-	 }
-}
-
-// in-place insertion sort
-inline void Robot::SortY()
-{  
-  // iterate along the list to the up
-  for( Robot* a(Robot::downmost); a->up;  )
-	 {
-		Robot* b = a->up;
-		Robot* c = a;
-		
-		// 		printf( "before shift\n" );
-		// 		// iterate along the list to the up
-		// 		for( Robot* z(Robot::downmost); z; z = z->up )
-		// 		  {
-		// 			 printf( "X:%.2f %p (l:%p r:%p) %s%s%s\n", z->pose.x, z, z->down, z->up, 
-		// 						z == a ? "a" : "", 
-		// 						z == b ? "b" : "",
-		// 						z == c ? "c" : "" );
-		// 		  }		
-		
-		// slide down until we find the up place for b 
-		while( c && (c->pose.y > b->pose.y) )
-		  c = c->down;			 
-		
-		if( c != a ) // ie. b is not in the correct place
-		  {			 
-			 // remove b from current slot
-			 a->up = b->up;			 
-			 if( b->up )
-				b->up->down = a;
-			 
-			 // insert it to the up of c
-			 b->down = c;
-			 
-			 if( c )
-				{
-				  b->up = c->up;
-				  b->up->down = b;
-				  c->up = b;				  
-				}			
-			 else
-				{
-				  b->up = downmost;				
-				  downmost->down = b;
-				  downmost = b;
-				}			 
-		  }
-		else
-		  a = a->up;
-	 }
-}
 
 
 
@@ -488,9 +354,6 @@ void Robot::UpdateAll()
 		{
 			FOR_EACH( r, population )
 				(*r)->UpdatePose();
-
-			SortX();
-			SortY();
 
 			FOR_EACH( r, population )
 				(*r)->UpdateSensors();

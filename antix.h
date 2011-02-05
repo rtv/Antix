@@ -11,6 +11,7 @@
 #include <math.h> 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #define GRAPHICS 1
 
@@ -86,9 +87,6 @@ namespace Antix
 	 static std::vector<Home*> homes;
 	 static std::vector<Robot*> population;
 	 
-	 static Robot* leftmost;
-	 static Robot* downmost;
-
 	 static uint64_t updates; // number of simulation steps so far	 
 	 static uint64_t updates_max; // number of simulation steps to run before quitting (0 means infinity)
 	 static unsigned int home_count; // number of home zones
@@ -96,10 +94,23 @@ namespace Antix
 	 static unsigned int puck_count; // number of pucks that exist in the world
 	 static unsigned int sleep_msec; // number of milliseconds to sleep at each update
 
+	 static unsigned int gui_interval; // number of milliseconds between window redraws
 	 static Robot* first;
+	 
+	 class Puck;
 
-	 static std::vector<std::set<Robot*> > matrix;
-	 static unsigned int mbits;
+	 class MatrixCell
+	 {
+	 public:
+		 std::set<Robot*> robots;
+		 std::set<Puck*> pucks;
+	 };
+
+	 static std::vector<Robot::MatrixCell> matrix;
+	 static unsigned int matrixwidth;
+
+	 void TestPucksInCell( const MatrixCell& cell );
+	 void TestRobotsInCell( const MatrixCell& cell );
 
 	 unsigned int index; // the matrix cell that currently holds this robot
 
@@ -116,15 +127,9 @@ namespace Antix
 	 void Draw();	 
 #endif
 	 
-	 // pointers to next robots sorted by axis
-	 Robot *left, *right, *up, *down;
-	 
 	 // deliver pucks to this location
 	 Home* home;
 	 
-	 static void SortX();
-	 static void SortY();
-
 		class Pose
 		{
 		public:
@@ -168,10 +173,32 @@ namespace Antix
 		  : home(home), pose(p), speed(s), range(range), bearing(bearing), haspuck(haspuck)
 			{ /* empty */}
 	 };
+
 	 
 	 /** A sense vector containing information about all the robots
 			 detected in my field of view */
 	 std::vector<SeeRobot> see_robots;
+	 
+	 static inline unsigned int Cell( double x )
+	 {
+		 while( x > worldsize ) // wraparound
+			 x -= worldsize;
+		 
+		 while( x < 0 ) // wraparound
+			 x += worldsize;
+		 
+		 const double d = Robot::worldsize / (double)Robot::matrixwidth;
+		 
+		 unsigned int cx( floor( x / d ));
+		 return cx;
+	 }
+	 
+	 static inline unsigned int Cell( double x, double y ) 
+	 {
+		 const unsigned int cx = Cell(x);
+		 const unsigned int cy = Cell(y);
+		 return (cx + (cy * Robot::matrixwidth) );		 
+	 }
 
 	public: class Puck
 	 {
@@ -179,17 +206,23 @@ namespace Antix
 		 double x, y;
 		 bool held;
 
+		 unsigned int index;
+		 
 		 /** constructor places a puck at specified pose */
 		 //Puck( double x, double y ) : x(x), y(y), held(false) {}
 		 
 		 /** default constructor places puck at random pose */
 	 Puck() 
 		 : x(drand48()*worldsize), y(drand48()*worldsize), held(false) 
-			 { /* empty */ }
+			 { 
+				 int index = Cell(x,y);
+				 matrix[index].pucks.insert(this);		
+				 //printf( "puck index %u pucks at index %u\n", index, (int)matrix[index].pucks.size() );
+			 }
 		 
 	 };		 
 	 
-	 static std::vector<Puck> pucks;
+	 static std::vector<Puck*> pucks;
 
 	 class SeePuck
 	 {
@@ -206,15 +239,10 @@ namespace Antix
 	 
 	 /** A sense vector containing information about all the pucks
 			 detected in my field of view */
-	 std::vector<SeePuck> see_pucks;	 
-	 
-/* 	 std::set<Robot*> left_set; */
-/* 	 std::set<Robot*> right_set; */
-
-/* 	 std::set<Robot*> up_set; */
-/* 	 std::set<Robot*> down_set; */
-	 
+	 std::vector<SeePuck> see_pucks;	 	 
 	 std::vector<Robot*> neighbors;
+	 std::vector<Puck*> neighbor_pucks;
+	 std::set<unsigned int> neighbor_cells;
 
 	 // constructor
 	 Robot( Home* home, const Pose& pose );
