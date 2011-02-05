@@ -69,6 +69,8 @@ void Robot::InitGraphics( int argc, char* argv[] )
   glutIdleFunc( idle_func );
   glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
   glEnable( GL_BLEND );
+  glEnableClientState( GL_VERTEX_ARRAY );
+	//  glEnableClientState( GL_COLOR_ARRAY );
   glMatrixMode( GL_PROJECTION );
   glLoadIdentity();
   gluOrtho2D( 0,1,0,1 );
@@ -105,9 +107,39 @@ void Robot::DrawAll()
 	  }
 	glEnd();
 #endif
+	
+	// if robots are smaller than 4 pixels across, draw them as points
+	if( (radius * (double)winsize/(double)worldsize) < 2.0 )
+		{
+			const size_t len( population.size() );
+			// keep this buffer around between calls for speed
+			static std::vector<GLfloat> pts;	
+			static std::vector<GLfloat> colors;	
+			pts.resize( len * 2 );
+			colors.resize( len * 3 );
+			
+			glVertexPointer( 2, GL_FLOAT, 0, &pts[0] );       
 
-	FOR_EACH( r, population )
-		(*r)->Draw();
+			glEnableClientState( GL_COLOR_ARRAY );
+			glColorPointer( 3, GL_FLOAT, 0, &colors[0] );       
+			
+			for( unsigned int i(0); i<len; ++i )
+				{
+					pts[2*i+0] = population[i]->pose.x;
+					pts[2*i+1] = population[i]->pose.y;
+
+					Home::Color& col = population[i]->home->color;
+					colors[3*i+0] = col.r;
+					colors[3*i+1] = col.g;
+					colors[3*i+2] = col.b;
+				}
+			
+			glDrawArrays( GL_POINTS, 0, len );
+			glDisableClientState( GL_COLOR_ARRAY );
+		}
+	else // more detailed drawing
+		FOR_EACH( r, population )
+			(*r)->Draw();
 	
 	FOR_EACH( it, homes )
 		{
@@ -127,34 +159,24 @@ void Robot::DrawAll()
 	glColor3f( 1,1,1 ); // green
 
 	glPointSize( 1.0 );
-	glBegin( GL_POINTS );
-	FOR_EACH( p, pucks )
-		glVertex2f( (*p)->x, (*p)->y );
-	glEnd();
+
+	// pack the puck points into a vertex array for fast rendering
+	const size_t len( pucks.size() );
+	
+	// keep this buffer around between calls for speed
+	static std::vector<GLfloat> pts;	
+	pts.resize( len * 2 );
+	glVertexPointer( 2, GL_FLOAT, 0, &pts[0] );       
+	
+	for( unsigned int i(0); i<len; ++i )
+		{
+			pts[2*i+0] = pucks[i].x;
+			pts[2*i+1] = pucks[i].y;
+		}
+
+	glDrawArrays( GL_POINTS, 0, len );
+
 	glPointSize( 2.0 );
-
-#if 0
-	// draw the sorted lists
-	glColor3f( 1,0,0 );
-	glBegin( GL_LINE_STRIP );
-	for( Robot* r = Robot::leftmost; r; r=r->right )
-	  {
-		 //printf( "%.2f %.2f\n", r->pose.x, r->pose.y );
-		 glVertex2f( r->pose.x, r->pose.y );
-	  }
-	glEnd();
-
-	// draw the sorted lists
-	glColor3f( 0,1,0 );
-	glBegin( GL_LINE_STRIP );
-	for( Robot* r = Robot::downmost; r; r=r->up )
-	  {
-		 //printf( "%.2f %.2f\n", r->pose.x, r->pose.y );
-		 glVertex2f( r->pose.x, r->pose.y );
-	  }
-	glEnd();
-#endif
-
 }
 
 // draw a robot
@@ -170,24 +192,14 @@ void Robot::Draw()
 	
 	double radius = Robot::radius;
 	
-	// if robots are smaller than 4 pixels across, draw them as points
-	if( (radius * (double)winsize/(double)worldsize) < 2.0 )
-	  {
-		 glBegin( GL_POINTS );
-		 glVertex2f( 0,0 );
-		 glEnd();
-	  }
-	else
-	  {
-		 // draw a circular body
-			GlDrawCircle( 0,0, radius, 12 );
-
-		 // draw a nose indicating forward direction
-		 glBegin(GL_LINES);
-		 glVertex2f( 0, 0 );
-		 glVertex2f( Robot::radius, 0 );
-		 glEnd();
-	  }
+	// draw a circular body
+	GlDrawCircle( 0,0, radius, 12 );
+	
+	// draw a nose indicating forward direction
+	glBegin(GL_LINES);
+	glVertex2f( 0, 0 );
+	glVertex2f( Robot::radius, 0 );
+	glEnd();
 
   if( Robot::show_data )
 	 {

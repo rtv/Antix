@@ -215,14 +215,13 @@ namespace Antix
 	 Puck() 
 		 : x(drand48()*worldsize), y(drand48()*worldsize), held(false) 
 			 { 
-				 int index = Cell(x,y);
-				 matrix[index].pucks.insert(this);		
+				 //matrix[Cell(x,y)].pucks.insert(this);		
 				 //printf( "puck index %u pucks at index %u\n", index, (int)matrix[index].pucks.size() );
 			 }
 		 
 	 };		 
 	 
-	 static std::vector<Puck*> pucks;
+	 static std::vector<Puck> pucks;
 
 	 class SeePuck
 	 {

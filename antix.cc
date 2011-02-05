@@ -23,7 +23,7 @@ double Robot::range( 0.1 );
 double Robot::worldsize(1.0);
 std::vector<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
-std::vector<Robot::Puck*> Robot::pucks;
+std::vector<Robot::Puck> Robot::pucks;
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 unsigned int Robot::home_count(1);
@@ -37,9 +37,11 @@ Robot* Robot::first(NULL);
 
 const char usage[] = "Antix understands these command line arguments:\n"
 	"  -? : Prints this helpful message.\n"
+  "  -a <int> : sets the number of pucks in the world.\n"
 	"  -c <int> : sets the number of pixels in the robots' sensor.\n"
 	"  -d  Enables drawing the sensor field of view. Speeds things up a bit.\n"
 	"  -f <float> : sets the sensor field of view angle in degrees.\n"
+  "  -g <int> : sets the interval between GUI redraws in milliseconds.\n"
 	"  -p <int> : set the size of the robot population.\n"
 	"  -r <float> : sets the sensor field of view range.\n"
 	"  -s <float> : sets the side length of the (square) world.\n"
@@ -148,8 +150,13 @@ void Robot::Init( int argc, char** argv )
 				exit(-1); // error
 			}
 	
-	for( unsigned int i=0; i<puck_count; i++ )
-	  pucks.push_back( new Puck() );	
+	pucks.resize(puck_count);
+	FOR_EACH( p, pucks )
+		{
+			p->x = drand48() * worldsize;
+			p->y = drand48() * worldsize;
+			matrix[Cell(p->x,p->y)].pucks.insert( &(*p) );
+		}
 	
 	
 #if GRAPHICS
@@ -211,21 +218,21 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 		
-      double dx( WrapDistance( puck->x - pose.x ) );
+      const double dx( WrapDistance( puck->x - pose.x ) );
 			if( fabs(dx) > Robot::range )
 				continue; // out of range
 			
-      double dy( WrapDistance( puck->y - pose.y ) );		
+      const double dy( WrapDistance( puck->y - pose.y ) );		
 			if( fabs(dy) > Robot::range )
 				continue; // out of range
 			
-      double range = hypot( dx, dy );
+      const double range( hypot( dx, dy ) );
       if( range > Robot::range ) 
 				continue; 
 			
       // discard if it's out of field of view 
-      double absolute_heading = atan2( dy, dx );
-      double relative_heading = AngleNormalize((absolute_heading - pose.a) );
+      const double absolute_heading( atan2( dy, dx ) );
+      const double relative_heading( AngleNormalize((absolute_heading - pose.a)));
       if( fabs(relative_heading) > fov/2.0   ) 
 				continue; 
 		
@@ -252,22 +259,19 @@ void Robot::UpdateSensors()
 	// check every robot in the world to see if it is detected
 	double dcell = worldsize / (double)matrixwidth;
 	
-	unsigned int xmin( Cell(pose.x - range));
-	unsigned int xmax( Cell(pose.x + range));
-	unsigned int ymin( Cell(pose.y - range));
-	unsigned int ymax( Cell(pose.y + range));
-
+	const unsigned int xmin( Cell(pose.x - range));
+	const unsigned int xmax( Cell(pose.x + range));
+	const unsigned int ymin( Cell(pose.y - range));
+	const unsigned int ymax( Cell(pose.y + range));
+	
 	for( unsigned int x(xmin); x <= xmax; ++x ) 
 		for( unsigned int y(ymin); y <= ymax; ++y ) 
 			{
-				const unsigned int index(x + (y * Robot::matrixwidth) );		 
-								
-				//if( this == first ) printf( "test (%.2f,%.2f) cell %u\n", x, y, Cell(x,y));
+				const unsigned int index(x + (y * Robot::matrixwidth) );		 							
 				//neighbor_cells.insert( index );
 				TestRobotsInCell( matrix[index] );
 				TestPucksInCell( matrix[index] );
 			}
-	//if( this == first ) puts("");
 }
 
 bool Robot::Pickup()

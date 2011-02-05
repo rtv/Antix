@@ -64,8 +64,8 @@ void Forager::Controller()
 					// puck, choose another place 
 					if( hypot( lx,ly ) < 0.05 )
 						{
-							lastx += drand48() * 0.4 - 0.2;
-							lasty += drand48() * 0.4 - 0.2;
+							lastx += drand48() * 1.0 - 0.5;
+							lasty += drand48() * 1.0 - 0.5;
 							
 							DistanceNormalize( lastx );
 							DistanceNormalize( lasty );
