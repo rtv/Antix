@@ -256,6 +256,8 @@ void Robot::Draw()
 	// shift out of local coordinate frame
   glPopMatrix();
 
+#if DEBUGVIS
+
   if( first == this )
 	 {
 		
@@ -271,16 +273,9 @@ void Robot::Draw()
 		glVertex2f( pose.x-ep, pose.y-ep );
 		glVertex2f( pose.x+ep, pose.y-ep );
 		glEnd();  
-
-		ep = 0.02;
-
-		glBegin( GL_LINE_LOOP );
-		glVertex2f( pose.x+ep, pose.y+ep );
-		glVertex2f( pose.x-ep, pose.y+ep );
-		glVertex2f( pose.x-ep, pose.y-ep );
-		glVertex2f( pose.x+ep, pose.y-ep );
-		glEnd();  
 		
+		ep = Robot::radius;
+
 		glColor3f( 1,0,1 );
 		FOR_EACH( it, neighbors )
 		  {
@@ -292,7 +287,6 @@ void Robot::Draw()
 			 glEnd();  
 		  }
 
-		ep = 0.01;
 		glColor3f( 0,1,1 );
 		FOR_EACH( it, neighbor_pucks )
 		  {
@@ -317,6 +311,7 @@ void Robot::Draw()
 				GlDrawCircle( x*dx+dx/2.0, y*dx+dx/2.0, dx/2.0, 8 );
 		  }		
 	 }
+#endif
 }
 
 #endif // GRAPHICS

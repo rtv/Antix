@@ -11,7 +11,6 @@
 #include "antix.h"
 using namespace Antix;
 
-unsigned int Robot::matrixwidth( 100 );
 
 // initialize static members
 bool Robot::paused( false );
@@ -30,25 +29,26 @@ unsigned int Robot::home_count(1);
 unsigned int Robot::home_population( 20 );
 unsigned int Robot::puck_count(100);
 unsigned int Robot::sleep_msec( 10 );
-std::vector<Robot::MatrixCell> Robot::matrix( Robot::matrixwidth * Robot::matrixwidth );
+std::vector<Robot::MatrixCell> Robot::matrix;
 
 unsigned int Robot::gui_interval(100);
 Robot* Robot::first(NULL);
 
-const char usage[] = "Antix understands these command line arguments:\n"
-	"  -? : Prints this helpful message.\n"
-  "  -a <int> : sets the number of pucks in the world.\n"
-	"  -c <int> : sets the number of pixels in the robots' sensor.\n"
-	"  -d  Enables drawing the sensor field of view. Speeds things up a bit.\n"
-	"  -f <float> : sets the sensor field of view angle in degrees.\n"
-  "  -g <int> : sets the interval between GUI redraws in milliseconds.\n"
-	"  -p <int> : set the size of the robot population.\n"
-	"  -r <float> : sets the sensor field of view range.\n"
-	"  -s <float> : sets the side length of the (square) world.\n"
-	"  -u <int> : sets the number of updates to run before quitting.\n"
-	"  -w <int> : sets the initial size of the window, in pixels.\n"
-	"  -z <int> : sets the number of milliseconds to sleep between updates.\n";
+unsigned int Robot::matrixwidth( Robot::worldsize / Robot::range );
 
+const char usage[] = "Antix understands these command line arguments:\n"
+  "  -? : Prints this helpful message.\n"
+  "  -a <int> : sets the number of pucks in the world.\n"
+  "  -c <int> : sets the number of pixels in the robots' sensor.\n"
+  "  -d  Enables drawing the sensor field of view. Speeds things up a bit.\n"
+  "  -f <float> : sets the sensor field of view angle in degrees.\n"
+  "  -g <int> : sets the interval between GUI redraws in milliseconds.\n"
+  "  -p <int> : set the size of the robot population.\n"
+  "  -r <float> : sets the sensor field of view range.\n"
+  "  -s <float> : sets the side length of the (square) world.\n"
+  "  -u <int> : sets the number of updates to run before quitting.\n"
+  "  -w <int> : sets the initial size of the window, in pixels.\n"
+  "  -z <int> : sets the number of milliseconds to sleep between updates.\n";
 
 Home::Home( const Color& color, double x, double y, double r ) 
 	: color(color), x(x), y(y), r(r) 
@@ -59,13 +59,13 @@ Home::Home( const Color& color, double x, double y, double r )
 
 Robot::Robot( Home* home,
 				  const Pose& pose )
-  : home(home),
-		pose(pose),
-		speed(),
-		see_pucks(),
-		see_robots(),
-		index(0),
-		puck_held(NULL)
+  : index(0),
+	 home(home),
+	 pose(pose),
+	 speed(),
+	 see_robots(),
+	 see_pucks(),
+	 puck_held(NULL)
 {
   // add myself to the static vector of all robots
   population.push_back( this );
@@ -149,6 +149,9 @@ void Robot::Init( int argc, char** argv )
 				puts( usage );
 				exit(-1); // error
 			}
+
+	Robot::matrixwidth = floor( Robot::worldsize / Robot::range );
+	Robot::matrix.resize( Robot::matrixwidth * Robot::matrixwidth );
 	
 	pucks.resize(puck_count);
 	FOR_EACH( p, pucks )
@@ -173,8 +176,10 @@ void Robot::TestRobotsInCell( const MatrixCell& cell )
       // discard if it's the same robot
       if( other == this )
 				continue;
-			
-			//neighbors.push_back( other );
+		
+#if DEBUGVIS
+		neighbors.push_back( other );
+#endif
 			
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
@@ -213,8 +218,9 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
     {      
       Puck* puck = *it;
 
-			//neighbor_pucks.push_back( puck );
-
+#if DEBUGVIS
+		neighbor_pucks.push_back( puck );
+#endif
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 		
@@ -249,29 +255,29 @@ void Robot::UpdateSensors()
   see_robots.clear();
   see_pucks.clear();
   
-	// note: the following two large sensing operations could safely be
-	// done in parallel since they do not modify any common data
-  
-  neighbors.clear();
-	neighbor_pucks.clear();
-	neighbor_cells.clear();
+  // note: the following two large sensing operations could safely be
+  // done in parallel since they do not modify any common data
 
-	// check every robot in the world to see if it is detected
-	double dcell = worldsize / (double)matrixwidth;
-	
-	const unsigned int xmin( Cell(pose.x - range));
-	const unsigned int xmax( Cell(pose.x + range));
-	const unsigned int ymin( Cell(pose.y - range));
-	const unsigned int ymax( Cell(pose.y + range));
-	
-	for( unsigned int x(xmin); x <= xmax; ++x ) 
-		for( unsigned int y(ymin); y <= ymax; ++y ) 
-			{
-				const unsigned int index(x + (y * Robot::matrixwidth) );		 							
-				//neighbor_cells.insert( index );
-				TestRobotsInCell( matrix[index] );
-				TestPucksInCell( matrix[index] );
-			}
+#if DEBUGVIS
+  // debug visualization  
+     neighbors.clear();
+     neighbor_pucks.clear();
+     neighbor_cells.clear();
+#endif  
+  
+  int x( Cell( pose.x ));
+  int y( Cell( pose.y ));
+  
+  // check the 3x3 cells around my position
+  UpdateSensorsCell( x-1, y-1 );
+  UpdateSensorsCell( x+0, y-1 );
+  UpdateSensorsCell( x+1, y-1 );
+  UpdateSensorsCell( x-1, y+0 );
+  UpdateSensorsCell( x+0, y+0 );
+  UpdateSensorsCell( x+1, y+0 );
+  UpdateSensorsCell( x-1, y+1 );
+  UpdateSensorsCell( x+0, y+1 );
+  UpdateSensorsCell( x+1, y+1 );
 }
 
 bool Robot::Pickup()

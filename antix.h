@@ -14,6 +14,7 @@
 #include <assert.h>
 
 #define GRAPHICS 1
+#define DEBUGVIS 0
 
 // handy STL iterator macro pair. Use FOR_EACH(I,C){ } to get an iterator I to
 // each item in a collection C.
@@ -181,44 +182,57 @@ namespace Antix
 	 
 	 static inline unsigned int Cell( double x )
 	 {
-		 while( x > worldsize ) // wraparound
-			 x -= worldsize;
-		 
-		 while( x < 0 ) // wraparound
-			 x += worldsize;
-		 
-		 const double d = Robot::worldsize / (double)Robot::matrixwidth;
-		 
-		 unsigned int cx( floor( x / d ));
-		 return cx;
+		const double d = Robot::worldsize / (double)Robot::matrixwidth;
+		
+		while( x > worldsize ) // wraparound
+		  x -= worldsize;
+		
+		while( x < 0 ) // wraparound
+		  x += worldsize;
+		
+		 return floor( x / d );
+	 }
+	 
+	 static inline unsigned int CellWrap( int x )
+	 {
+		while( x >= (int)matrixwidth ) // wraparound
+		  x -= matrixwidth;
+		
+		while( x < 0 ) // wraparound
+		  x += matrixwidth;
+		
+		return x;
 	 }
 	 
 	 static inline unsigned int Cell( double x, double y ) 
 	 {
-		 const unsigned int cx = Cell(x);
-		 const unsigned int cy = Cell(y);
-		 return (cx + (cy * Robot::matrixwidth) );		 
+		return (Cell(x) + (Cell(y) * Robot::matrixwidth) );		 
+	 }
+	 
+	 inline void UpdateSensorsCell( unsigned int x, unsigned int y )
+	 {
+		unsigned int index( CellWrap(x) + ( CellWrap(y) * matrixwidth ));
+		TestRobotsInCell( matrix[index] );
+		TestPucksInCell( matrix[index] );
+		
+#if DEBUGVIS		
+		neighbor_cells.insert( index );
+#endif
 	 }
 
 	public: class Puck
 	 {
 	 public:
-		 double x, y;
-		 bool held;
-
+		 bool held;		 
 		 unsigned int index;
+ 		 double x,y;
 		 
 		 /** constructor places a puck at specified pose */
 		 //Puck( double x, double y ) : x(x), y(y), held(false) {}
 		 
-		 /** default constructor places puck at random pose */
 	 Puck() 
-		 : x(drand48()*worldsize), y(drand48()*worldsize), held(false) 
-			 { 
-				 //matrix[Cell(x,y)].pucks.insert(this);		
-				 //printf( "puck index %u pucks at index %u\n", index, (int)matrix[index].pucks.size() );
-			 }
-		 
+		:  held(false), index(0),x(0.0), y(0.0) 
+			{  /* do nothing */ }		 
 	 };		 
 	 
 	 static std::vector<Puck> pucks;
@@ -227,21 +241,23 @@ namespace Antix
 	 {
 	 public:
 		 Puck* puck;
-		 double range;
-		 double bearing;		 
 		 bool held;
+		 double bearing;		 
+		 double range;
 		 
 	 SeePuck( Puck* puck,  const double range, const double bearing, const bool held )
-		 : puck(puck), range(range), bearing(bearing), held(held)
+		: puck(puck), held(held), bearing(bearing), range(range) 
 		 { /* empty */}
 	 };
 	 
 	 /** A sense vector containing information about all the pucks
 			 detected in my field of view */
 	 std::vector<SeePuck> see_pucks;	 	 
+#if DEBUGVIS
 	 std::vector<Robot*> neighbors;
 	 std::vector<Puck*> neighbor_pucks;
 	 std::set<unsigned int> neighbor_cells;
+#endif
 
 	 // constructor
 	 Robot( Home* home, const Pose& pose );
