@@ -7,6 +7,12 @@ using namespace Antix;
 
 int Robot::winsize( 700 );
 
+static double zoom(1.0);
+static double panx(0.0);
+static double pany(0.0);
+static bool zooming(false);
+//static int clickx(0), clicky(0);
+
 // GLUT callback functions ---------------------------------------------------
 
 // update the world - this is called whenever GLUT runs out of events
@@ -33,14 +39,32 @@ static void display_func( void )
   glutTimerFunc( Robot::gui_interval, timer_func, 0 );
 }
 
+
 static void mouse_func(int button, int state, int x, int y) 
 {  
   if( (button == GLUT_LEFT_BUTTON) && (state == GLUT_DOWN ) )
 	 {
 		Robot::paused = !Robot::paused;
 	 }
+  
+  if( (button == GLUT_RIGHT_BUTTON) )
+	 {
+		zooming = (state == GLUT_DOWN);
+		//clickx = x;
+		//clicky = y;
+	 }
 }
 
+static void motion_func( int x, int y) 
+{  
+  if( zooming )
+	 {
+		static int lasty(0);		
+		double scale = y > lasty ? 0.95 : 1.05;
+		glScalef( scale, scale, 1 );
+		lasty = y;
+	 }
+}
 
 // utility
 void GlDrawCircle( double x, double y, double r, double count )
@@ -57,6 +81,8 @@ void GlDrawCircle( double x, double y, double r, double count )
 
 void Robot::InitGraphics( int argc, char* argv[] )
 {
+  zoom = 1.0 / Robot::worldsize;
+
   // initialize opengl graphics
   glutInit( &argc, argv );
   glutInitWindowSize( winsize, winsize );
@@ -66,6 +92,7 @@ void Robot::InitGraphics( int argc, char* argv[] )
   glutDisplayFunc( display_func );
   glutTimerFunc( gui_interval, timer_func, 0 );
   glutMouseFunc( mouse_func );
+  glutMotionFunc( motion_func );
   glutIdleFunc( idle_func );
   glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
   glEnable( GL_BLEND );
@@ -76,8 +103,8 @@ void Robot::InitGraphics( int argc, char* argv[] )
   gluOrtho2D( 0,1,0,1 );
   glMatrixMode( GL_MODELVIEW );
   glLoadIdentity();
-  glScalef( 1.0/Robot::worldsize, 1.0/Robot::worldsize, 1 ); 
-	glPointSize( 2.0 );
+  glScalef( zoom, zoom, 1 ); 
+  glPointSize( 2.0 );
 }
 
 void Robot::UpdateGui()
@@ -88,7 +115,7 @@ void Robot::UpdateGui()
 // render all robots in OpenGL
 void Robot::DrawAll()
 {		
-#if 1
+#if DEBUGVIS
 	// draw the matrix 
 	double d = worldsize / (double)(matrixwidth);
 

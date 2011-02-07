@@ -217,37 +217,37 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
   FOR_EACH( it, cell.pucks )
     {      
       Puck* puck = *it;
-
+		
 #if DEBUGVIS
 		neighbor_pucks.push_back( puck );
 #endif
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 		
-      const double dx( WrapDistance( puck->x - pose.x ) );
-			if( fabs(dx) > Robot::range )
-				continue; // out of range
-			
-      const double dy( WrapDistance( puck->y - pose.y ) );		
-			if( fabs(dy) > Robot::range )
-				continue; // out of range
-			
-      const double range( hypot( dx, dy ) );
-      if( range > Robot::range ) 
-				continue; 
-			
-      // discard if it's out of field of view 
+		const double dx( WrapDistance( puck->x - pose.x ) );
+		if( fabs(dx) > Robot::range )
+		  continue; // out of range
+		
+		const double dy( WrapDistance( puck->y - pose.y ) );		
+		if( fabs(dy) > Robot::range )
+		  continue; // out of range
+		
+		const double r( hypot( dx, dy ) );
+		if( r > Robot::range ) 
+		  continue; 
+		
+		// discard if it's out of field of view 
       const double absolute_heading( atan2( dy, dx ) );
       const double relative_heading( AngleNormalize((absolute_heading - pose.a)));
       if( fabs(relative_heading) > fov/2.0   ) 
-				continue; 
+		  continue; 
 		
-			// passes all the tests, so we record a puck detection in the
-			// vector
-			see_pucks.push_back( SeePuck( puck, range, 
-																		relative_heading,
-																		puck->held));
-		}		
+		// passes all the tests, so we record a puck detection in the
+		// vector
+		see_pucks.push_back( SeePuck( puck, r, 
+												relative_heading,
+												puck->held));
+	 }		
 }
 
 void Robot::UpdateSensors()
@@ -351,9 +351,6 @@ void Robot::UpdatePose()
 		}
 }
 
-
-
-
 void Robot::UpdateAll()
 {
   // if we've done enough updates, exit the program
@@ -362,14 +359,17 @@ void Robot::UpdateAll()
   
   if( ! Robot::paused )
 		{
-			FOR_EACH( r, population )
-				(*r)->UpdatePose();
-
-			FOR_EACH( r, population )
-				(*r)->UpdateSensors();
-
-			FOR_EACH( r, population )
-				(*r)->Controller();
+		  // not safe to do in parallel
+		  FOR_EACH( r, population )
+			 (*r)->UpdatePose();
+		  
+		  // these calls could be done in parallel
+		  FOR_EACH( r, population )
+			 (*r)->UpdateSensors();
+		  
+		  // not necessarily safe to do in parallel
+		  FOR_EACH( r, population )
+			 (*r)->Controller();
 		}
 
   ++updates;
