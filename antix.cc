@@ -32,7 +32,7 @@ unsigned int Robot::sleep_msec( 10 );
 const char usage[] = "Antix understands these command line arguments:\n"
 	"  -? : Prints this helpful message.\n"
 	"  -c <int> : sets the number of pixels in the robots' sensor.\n"
-	"  -d  Enables drawing the sensor field of view. Speeds things up a bit.\n"
+	"  -d  Enables drawing the sensor field of view. Slows things down a bit.\n"
 	"  -f <float> : sets the sensor field of view angle in degrees.\n"
 	"  -p <int> : set the size of the robot population.\n"
 	"  -r <float> : sets the sensor field of view range.\n"
