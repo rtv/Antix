@@ -159,6 +159,9 @@ void Robot::Init( int argc, char** argv )
 
 void Robot::TestRobotsInCell( const MatrixCell& cell )
 {
+  // test squared ranges to avoid expensive sqrt()
+  double rngsqrd( range * range );
+
   FOR_EACH( it, cell.robots )
     {
       Robot* other = *it;
@@ -181,9 +184,10 @@ void Robot::TestRobotsInCell( const MatrixCell& cell )
       const double dy( WrapDistance( other->pose.y - pose.y ) );		
       if( fabs(dy) > Robot::range )
 	continue; // out of range
-			
-      const double range = hypot( dx, dy );
-      if( range > Robot::range ) 
+      
+      // test distance squared
+      const double dsq = dx*dx + dy*dy;
+      if( dsq > rngsqrd ) 
 	continue; 
 			
       // discard if it's out of field of view 
@@ -195,7 +199,7 @@ void Robot::TestRobotsInCell( const MatrixCell& cell )
       see_robots.push_back( SeeRobot( other->home,
 				      other->pose, 
 				      other->speed, 
-				      range, 
+				      sqrt( dsq ), 
 				      relative_heading,
 				      other->Holding() ) );						
     }
@@ -203,7 +207,9 @@ void Robot::TestRobotsInCell( const MatrixCell& cell )
 
 void Robot::TestPucksInCell( const MatrixCell& cell )
 {
-
+  // test squared ranges to avoid expensive sqrt()
+  double rngsqrd( range * range );
+  
   FOR_EACH( it, cell.pucks )
     {      
       Puck* puck = *it;
@@ -222,10 +228,10 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
       if( fabs(dy) > Robot::range )
 	continue; // out of range
 		
-      const double r( hypot( dx, dy ) );
-      if( r > Robot::range ) 
+      const double dsq = dx*dx + dy*dy;
+      if( dsq > rngsqrd ) 
 	continue; 
-		
+			
       // discard if it's out of field of view 
       const double absolute_heading( fast_atan2( dy, dx ) );
       const double relative_heading( AngleNormalize((absolute_heading - pose.a)));
@@ -234,7 +240,7 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
 		
       // passes all the tests, so we record a puck detection in the
       // vector
-      see_pucks.push_back( SeePuck( puck, r, 
+      see_pucks.push_back( SeePuck( puck, sqrt(dsq), 
 				    relative_heading,
 				    puck->held));
     }		

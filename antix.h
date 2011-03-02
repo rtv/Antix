@@ -14,7 +14,7 @@
 #include <assert.h>
 
 #define GRAPHICS 1
-#define DEBUGVIS 1
+#define DEBUGVIS 0
 
 // handy STL iterator macro pair. Use FOR_EACH(I,C){ } to get an iterator I to
 // each item in a collection C.
