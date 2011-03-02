@@ -35,6 +35,10 @@ Robot* Robot::first(NULL);
 
 unsigned int Robot::matrixwidth( Robot::worldsize / (Robot::range) );
 
+template <class T, class C>
+void EraseAll( T thing, C& cont )
+{ cont.erase( std::remove( cont.begin(), cont.end(), thing ), cont.end() ); }
+
 const char usage[] = "Antix understands these command line arguments:\n"
   "  -? : Prints this helpful message.\n"
   "  -a <int> : sets the number of pucks in the world.\n"
@@ -327,13 +331,13 @@ void Robot::UpdatePose()
 	
   if( newindex != index )
     {
-      matrix[index].robots.erase( this );
-      matrix[newindex].robots.insert( this );		
+      EraseAll( this, matrix[index].robots );
+      matrix[newindex].robots.push_back( this );		
             
       if( puck_held )
 	{
-	  matrix[index].pucks.erase( puck_held );
-	  matrix[newindex].pucks.insert( puck_held );		
+	  EraseAll( puck_held, matrix[index].pucks );
+	  matrix[newindex].pucks.push_back( puck_held );		
 	}
 			
       index = newindex;
@@ -357,13 +361,6 @@ void Robot::FovBBox( bbox_t& box )
   box.y.min = pose.y;
   box.y.max = pose.y;
   
-  // normalize pose angle 0-2PI
-//    while( pose.a < 0 )
-//      pose.a += M_PI*2.0;
-  
-//    while( pose.a > M_PI*2.0 )
-//      pose.a -= M_PI*2.0;
-  
   const double halffov = fov/2.0;
   const double lefta( pose.a + halffov );
   const double righta( pose.a - halffov );
@@ -376,41 +373,21 @@ void Robot::FovBBox( bbox_t& box )
   grow_bounds( box.x, pose.x + range * fast_cos( righta ) );
   grow_bounds( box.y, pose.y + range * fast_sin( righta ) );
   
-   // points where the fov crosses an axis
-
-  // test zero degrees
-  //if( righta 
-
-//   if( pose.a < halffov )
-
+  // points where the fov crosses an axis
+  if( lefta > 0 && righta < 0 )
+    grow_bounds( box.x, pose.x + range );
   
-   if( lefta > 0 && righta < 0 )
-     {
-       grow_bounds( box.x, pose.x + range );
-       //grow_bounds( box.y, pose.y );
-     }
+  if( lefta > M_PI/2.0 && righta < M_PI/2.0 )
+    grow_bounds( box.y, pose.y + range );
   
-   if( lefta > M_PI/2.0 && righta < M_PI/2.0 )
-     {
-       //grow_bounds( box.x, pose.x );
-       grow_bounds( box.y, pose.y + range );
-     }
-
-   if( lefta > M_PI && righta < M_PI )
-     {
-       grow_bounds( box.x, pose.x - range );
-     }
-   
-   if( lefta > -M_PI && righta < -M_PI )
-     {
-       grow_bounds( box.x, pose.x - range );
-     }
-   
-   if( lefta > -M_PI/2.0 && righta < -M_PI/2.0 )
-     {       
-       grow_bounds( box.y, pose.y - range );
-     }
-
+  if( lefta > M_PI && righta < M_PI )
+    grow_bounds( box.x, pose.x - range );
+  
+  if( lefta > -M_PI && righta < -M_PI )
+    grow_bounds( box.x, pose.x - range );
+  
+  if( lefta > -M_PI/2.0 && righta < -M_PI/2.0 )
+    grow_bounds( box.y, pose.y - range );
 }
 
 void Home::UpdatePucks()
@@ -506,23 +483,23 @@ double Robot::AngleNormalize( double a )
 Puck::Puck( double x, double y ) 
   : held(true), home(NULL), index(0), lifetime(100), x(x), y(y) 
 {
-  Robot::matrix[Robot::Cell(x,y)].pucks.insert(this);  
+  Robot::matrix[Robot::Cell(x,y)].pucks.push_back(this);  
   Drop();
 }
 
 Puck::~Puck()
 {
-  Robot::matrix[Robot::Cell(x,y)].pucks.erase(this);    
+  EraseAll( this, Robot::matrix[Robot::Cell(x,y)].pucks );
 }
 
 void Puck::Replace()
 {
-  Robot::matrix[Robot::Cell(x,y)].pucks.erase(this);    
-
+  EraseAll( this, Robot::matrix[Robot::Cell(x,y)].pucks );
+  
   x = drand48() * Robot::worldsize;
   y = drand48() * Robot::worldsize;
-
-  Robot::matrix[Robot::Cell(x,y)].pucks.insert(this);  
+  
+  Robot::matrix[Robot::Cell(x,y)].pucks.push_back(this);  
   
   if( home )
     {

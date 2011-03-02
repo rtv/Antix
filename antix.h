@@ -146,8 +146,8 @@ namespace Antix
 	 class MatrixCell
 	 {
 	 public:
-		 std::set<Robot*> robots;
-		 std::set<Puck*> pucks;
+	   std::vector<Robot*> robots;
+	   std::vector<Puck*> pucks;
 	 };
 
 	 static std::vector<Robot::MatrixCell> matrix;
