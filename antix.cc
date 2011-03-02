@@ -1,8 +1,8 @@
 /****
-   antix.cc
-   version 1
-   Richard Vaughan  
-	 Clone this package from git://github.com/rtv/Antix.git
+     antix.cc
+     version 1
+     Richard Vaughan  
+     Clone this package from git://github.com/rtv/Antix.git
 ****/
 
 #include <assert.h>
@@ -22,7 +22,6 @@ double Robot::range( 0.1 );
 double Robot::worldsize(1.0);
 std::vector<Home*> Robot::homes;
 std::vector<Robot*> Robot::population;
-std::vector<Robot::Puck> Robot::pucks;
 uint64_t Robot::updates(0);
 uint64_t Robot::updates_max( 0.0 ); 
 unsigned int Robot::home_count(1);
@@ -34,7 +33,7 @@ std::vector<Robot::MatrixCell> Robot::matrix;
 unsigned int Robot::gui_interval(100);
 Robot* Robot::first(NULL);
 
-unsigned int Robot::matrixwidth( Robot::worldsize / Robot::range );
+unsigned int Robot::matrixwidth( Robot::worldsize / (Robot::range) );
 
 const char usage[] = "Antix understands these command line arguments:\n"
   "  -? : Prints this helpful message.\n"
@@ -51,163 +50,154 @@ const char usage[] = "Antix understands these command line arguments:\n"
   "  -z <int> : sets the number of milliseconds to sleep between updates.\n";
 
 Home::Home( const Color& color, double x, double y, double r ) 
-	: color(color), x(x), y(y), r(r) 
+  : color(color), pucks(), score(0), x(x), y(y), r(r) 
 {
-	Robot::homes.push_back(this);
+  Robot::homes.push_back(this);
 }
 
 
 Robot::Robot( Home* home,
-				  const Pose& pose )
+	      const Pose& pose )
   : index(0),
-	 home(home),
-	 pose(pose),
-	 speed(),
-	 see_robots(),
-	 see_pucks(),
-	 puck_held(NULL)
+    home(home),
+    pose(pose),
+    speed(),
+    see_robots(),
+    see_pucks(),
+    puck_held(NULL)
 {
   // add myself to the static vector of all robots
   population.push_back( this );
   
   if( ! first )
-	 first = this;
+    first = this;
 }
 
 void Robot::Init( int argc, char** argv )
 {
   // seed the random number generator with the current time
-  srand48(time(NULL));
-  //srand48(0); // for debugging - start the same every time
+  //srand48(time(NULL));
+  srand48(0); // for debugging - start the same every time
 	
   // parse arguments to configure Robot static members
-	int c;
-	while( ( c = getopt( argc, argv, "?dh:a:p:s:f:g:r:c:u:z:w:")) != -1 )
-		switch( c )
-			{
-			case 'h':
-			  home_count = atoi( optarg );
-			  printf( "[Antix] home count: %d\n", home_count );
-			  break;
+  int c;
+  while( ( c = getopt( argc, argv, "?dh:a:p:s:f:g:r:c:u:z:w:")) != -1 )
+    switch( c )
+      {
+      case 'h':
+	home_count = atoi( optarg );
+	printf( "[Antix] home count: %d\n", home_count );
+	break;
 
-			case 'a':
-			  puck_count = atoi( optarg );
-			  printf( "[Antix] puck count: %d\n", puck_count );
-			  break;
+      case 'a':
+	puck_count = atoi( optarg );
+	printf( "[Antix] puck count: %d\n", puck_count );
+	break;
 			  
-			case 'p': 
-				home_population = atoi( optarg );
-				printf( "[Antix] home_population: %d\n", home_population );
-				break;
+      case 'p': 
+	home_population = atoi( optarg );
+	printf( "[Antix] home_population: %d\n", home_population );
+	break;
 				
-			case 's': 
-				worldsize = atof( optarg );
-				printf( "[Antix] worldsize: %.2f\n", worldsize );
-				break;
+      case 's': 
+	worldsize = atof( optarg );
+	printf( "[Antix] worldsize: %.2f\n", worldsize );
+	break;
 				
-			case 'f': 
-				fov = dtor(atof( optarg )); // degrees to radians
-				printf( "[Antix] fov: %.2f\n", fov );
-				break;
+      case 'f': 
+	fov = dtor(atof( optarg )); // degrees to radians
+	printf( "[Antix] fov: %.2f\n", fov );
+	break;
 				
       case 'g':
-				gui_interval = atol( optarg );
-				printf( "[Antix] gui_interval: %lu\n", (long unsigned)gui_interval );
-				break;
+	gui_interval = atol( optarg );
+	printf( "[Antix] gui_interval: %lu\n", (long unsigned)gui_interval );
+	break;
 
-			case 'r': 
-				range = atof( optarg );
-				printf( "[Antix] range: %.2f\n", range );
-				break;
+      case 'r': 
+	range = atof( optarg );
+	printf( "[Antix] range: %.2f\n", range );
+	break;
 								
       case 'u':
-				updates_max = atol( optarg );
-				printf( "[Antix] updates_max: %lu\n", (long unsigned)updates_max );
-				break;
+	updates_max = atol( optarg );
+	printf( "[Antix] updates_max: %lu\n", (long unsigned)updates_max );
+	break;
 				
-			case 'z':
-				sleep_msec = atoi( optarg );
-				printf( "[Antix] sleep_msec: %d\n", sleep_msec );
-				break;
+      case 'z':
+	sleep_msec = atoi( optarg );
+	printf( "[Antix] sleep_msec: %d\n", sleep_msec );
+	break;
 				
 #if GRAPHICS
-			case 'w': winsize = atoi( optarg );
-				printf( "[Antix] winsize: %d\n", winsize );
-				break;
+      case 'w': winsize = atoi( optarg );
+	printf( "[Antix] winsize: %d\n", winsize );
+	break;
 
-			case 'd': show_data=true;
-			  puts( "[Antix] show data" );
-			  break;
+      case 'd': show_data=true;
+	puts( "[Antix] show data" );
+	break;
 #endif			
-			case '?':
-			  puts( usage );
-			  exit(0); // ok
-			  break;
+      case '?':
+	puts( usage );
+	exit(0); // ok
+	break;
 
-			default:
-				fprintf( stderr, "[Antix] Option parse error.\n" );
-				puts( usage );
-				exit(-1); // error
-			}
+      default:
+	fprintf( stderr, "[Antix] Option parse error.\n" );
+	puts( usage );
+	exit(-1); // error
+      }
 
-	Robot::matrixwidth = floor( Robot::worldsize / Robot::range );
-	Robot::matrix.resize( Robot::matrixwidth * Robot::matrixwidth );
-	
-	pucks.resize(puck_count);
-	FOR_EACH( p, pucks )
-		{
-			p->x = drand48() * worldsize;
-			p->y = drand48() * worldsize;
-			matrix[Cell(p->x,p->y)].pucks.insert( &(*p) );
-		}
-	
-	
+  Robot::matrixwidth = floor( Robot::worldsize / Robot::range );
+  Robot::matrix.resize( Robot::matrixwidth * Robot::matrixwidth );
+  	
 #if GRAPHICS
-	InitGraphics( argc, argv );
+  InitGraphics( argc, argv );
 #endif // GRAPHICS
 }
 
 void Robot::TestRobotsInCell( const MatrixCell& cell )
 {
-	FOR_EACH( it, cell.robots )
-		{
+  FOR_EACH( it, cell.robots )
+    {
       Robot* other = *it;
-			
+      
       // discard if it's the same robot
       if( other == this )
-				continue;
+	continue;
 		
 #if DEBUGVIS
-		neighbors.push_back( other );
+      neighbors.push_back( other );
 #endif
 			
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 			
-      double dx( WrapDistance( other->pose.x - pose.x ) );
-			if( fabs(dx) > Robot::range )
-				continue; // out of range
+      const double dx( WrapDistance( other->pose.x - pose.x ) );
+      if( fabs(dx) > Robot::range )
+	continue; // out of range
 			
-      double dy( WrapDistance( other->pose.y - pose.y ) );		
-			if( fabs(dy) > Robot::range )
-				continue; // out of range
+      const double dy( WrapDistance( other->pose.y - pose.y ) );		
+      if( fabs(dy) > Robot::range )
+	continue; // out of range
 			
-      double range = hypot( dx, dy );
+      const double range = hypot( dx, dy );
       if( range > Robot::range ) 
-				continue; 
+	continue; 
 			
       // discard if it's out of field of view 
-      double absolute_heading = atan2( dy, dx );
-      double relative_heading = AngleNormalize((absolute_heading - pose.a) );
+      const double absolute_heading( fast_atan2( dy, dx ) );
+      const double relative_heading( AngleNormalize((absolute_heading - pose.a) ));
       if( fabs(relative_heading) > fov/2.0   ) 
-				continue; 
+	continue; 
 			
-			see_robots.push_back( SeeRobot( other->home,
-																			other->pose, 
-																			other->speed, 
-																			range, 
-																			relative_heading,
-																			other->Holding() ) );						
+      see_robots.push_back( SeeRobot( other->home,
+				      other->pose, 
+				      other->speed, 
+				      range, 
+				      relative_heading,
+				      other->Holding() ) );						
     }
 }	
 
@@ -219,35 +209,35 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
       Puck* puck = *it;
 		
 #if DEBUGVIS
-		neighbor_pucks.push_back( puck );
+      neighbor_pucks.push_back( puck );
 #endif
       // discard if it's out of range. We put off computing the
       // hypotenuse as long as we can, as it's relatively expensive.
 		
-		const double dx( WrapDistance( puck->x - pose.x ) );
-		if( fabs(dx) > Robot::range )
-		  continue; // out of range
+      const double dx( WrapDistance( puck->x - pose.x ) );
+      if( fabs(dx) > Robot::range )
+	continue; // out of range
 		
-		const double dy( WrapDistance( puck->y - pose.y ) );		
-		if( fabs(dy) > Robot::range )
-		  continue; // out of range
+      const double dy( WrapDistance( puck->y - pose.y ) );		
+      if( fabs(dy) > Robot::range )
+	continue; // out of range
 		
-		const double r( hypot( dx, dy ) );
-		if( r > Robot::range ) 
-		  continue; 
+      const double r( hypot( dx, dy ) );
+      if( r > Robot::range ) 
+	continue; 
 		
-		// discard if it's out of field of view 
-      const double absolute_heading( atan2( dy, dx ) );
+      // discard if it's out of field of view 
+      const double absolute_heading( fast_atan2( dy, dx ) );
       const double relative_heading( AngleNormalize((absolute_heading - pose.a)));
       if( fabs(relative_heading) > fov/2.0   ) 
-		  continue; 
+	continue; 
 		
-		// passes all the tests, so we record a puck detection in the
-		// vector
-		see_pucks.push_back( SeePuck( puck, r, 
-												relative_heading,
-												puck->held));
-	 }		
+      // passes all the tests, so we record a puck detection in the
+      // vector
+      see_pucks.push_back( SeePuck( puck, r, 
+				    relative_heading,
+				    puck->held));
+    }		
 }
 
 void Robot::UpdateSensors()
@@ -260,46 +250,39 @@ void Robot::UpdateSensors()
 
 #if DEBUGVIS
   // debug visualization  
-     neighbors.clear();
-     neighbor_pucks.clear();
-     neighbor_cells.clear();
+  neighbors.clear();
+  neighbor_pucks.clear();
+  neighbor_cells.clear();
 #endif  
   
-  int x( Cell( pose.x ));
-  int y( Cell( pose.y ));
+  const int lastx( CellNoWrap(sensor_bbox.x.max) );
+  const int lasty( CellNoWrap(sensor_bbox.y.max) );
   
-  // check the 3x3 cells around my position
-  UpdateSensorsCell( x-1, y-1 );
-  UpdateSensorsCell( x+0, y-1 );
-  UpdateSensorsCell( x+1, y-1 );
-  UpdateSensorsCell( x-1, y+0 );
-  UpdateSensorsCell( x+0, y+0 );
-  UpdateSensorsCell( x+1, y+0 );
-  UpdateSensorsCell( x-1, y+1 );
-  UpdateSensorsCell( x+0, y+1 );
-  UpdateSensorsCell( x+1, y+1 );
+  for( int x(CellNoWrap(sensor_bbox.x.min)); x<=lastx; x++ )
+    for( int y(CellNoWrap(sensor_bbox.y.min)); y<=lasty; y++ )
+      UpdateSensorsCell( x,y );
 }
 
 bool Robot::Pickup()
 {
   if( ! puck_held ) 
-		FOR_EACH( it, see_pucks )
-			{
-				// is the puck close enough and is it not held already?
-				if( (it->range < pickup_range) && !it->puck->held)
-					{				
-						// pick it up
-						puck_held = it->puck;
-						puck_held->held = true;
-						return true;
-					}		  		  
-			}
+    FOR_EACH( it, see_pucks )
+      {
+	// is the puck close enough and is it not held already?
+	if( (it->range < pickup_range) && !it->puck->held)
+	  {				
+	    // pick it up
+	    puck_held = it->puck;
+	    puck_held->Pickup();
+	    return true;
+	  }		  		  
+      }
 	
-	// already holding or nothing close enough
+  // already holding or nothing close enough
   return false; 
 }
 
-bool Robot::Holding()
+bool Robot::Holding() const
 {
   return (bool)puck_held;
 }
@@ -307,11 +290,11 @@ bool Robot::Holding()
 bool Robot::Drop()
 {
   if( puck_held )
-	 {
-		puck_held->held = false;
-		puck_held = NULL;		
-		return true; // dropped successfully
-	 }
+    {
+      puck_held->Drop();
+      puck_held = NULL;		
+      return true; // dropped successfully
+    }
   return false; // nothing to drop  
 }
 
@@ -319,8 +302,8 @@ bool Robot::Drop()
 void Robot::UpdatePose()
 {
   // move according to the current speed 
-  double dx = speed.v * cos(pose.a);
-  double dy = speed.v * sin(pose.a);; 
+  double dx = speed.v * fast_cos(pose.a);
+  double dy = speed.v * fast_sin(pose.a);; 
   double da = speed.w;
   
   pose.x = DistanceNormalize( pose.x + dx );
@@ -329,54 +312,149 @@ void Robot::UpdatePose()
     
   unsigned int newindex = Cell( pose.x, pose.y );
  
- // if we're carrying a puck, update it's position
+  // if we're carrying a puck, update it's position
   if( puck_held )
-	 {
-		puck_held->x = pose.x;
-		puck_held->y = pose.y;
-	 }
+    {
+      puck_held->x = pose.x;
+      puck_held->y = pose.y;
+    }
 	
   if( newindex != index )
-		{
-			matrix[index].robots.erase( this );
-			matrix[newindex].robots.insert( this );		
+    {
+      matrix[index].robots.erase( this );
+      matrix[newindex].robots.insert( this );		
+            
+      if( puck_held )
+	{
+	  matrix[index].pucks.erase( puck_held );
+	  matrix[newindex].pucks.insert( puck_held );		
+	}
 			
-			if( puck_held )
-				{
-					matrix[index].pucks.erase( puck_held );
-					matrix[newindex].pucks.insert( puck_held );		
-				}
-			
-			index = newindex;
-		}
+      index = newindex;
+    }
+
+  // compute the new bounding box of the fov
+  FovBBox( sensor_bbox );
+}
+
+static inline void grow_bounds( bounds_t& b, double val )
+{
+  if( val < b.min ) b.min = val;
+  if( val > b.max ) b.max = val;  
+}
+
+// find the axis-aligned bounding box of our field of view
+void Robot::FovBBox( bbox_t& box )
+{
+  box.x.min = pose.x;
+  box.x.max = pose.x;
+  box.y.min = pose.y;
+  box.y.max = pose.y;
+  
+  // normalize pose angle 0-2PI
+//    while( pose.a < 0 )
+//      pose.a += M_PI*2.0;
+  
+//    while( pose.a > M_PI*2.0 )
+//      pose.a -= M_PI*2.0;
+  
+  const double halffov = fov/2.0;
+  const double lefta( pose.a + halffov );
+  const double righta( pose.a - halffov );
+
+  // extreme left of FOV
+  grow_bounds( box.x, pose.x + range * fast_cos( lefta ) );
+  grow_bounds( box.y, pose.y + range * fast_sin( lefta ) );
+  
+  // extreme right of FOV
+  grow_bounds( box.x, pose.x + range * fast_cos( righta ) );
+  grow_bounds( box.y, pose.y + range * fast_sin( righta ) );
+  
+   // points where the fov crosses an axis
+
+  // test zero degrees
+  //if( righta 
+
+//   if( pose.a < halffov )
+
+  
+   if( lefta > 0 && righta < 0 )
+     {
+       grow_bounds( box.x, pose.x + range );
+       //grow_bounds( box.y, pose.y );
+     }
+  
+   if( lefta > M_PI/2.0 && righta < M_PI/2.0 )
+     {
+       //grow_bounds( box.x, pose.x );
+       grow_bounds( box.y, pose.y + range );
+     }
+
+   if( lefta > M_PI && righta < M_PI )
+     {
+       grow_bounds( box.x, pose.x - range );
+     }
+   
+   if( lefta > -M_PI && righta < -M_PI )
+     {
+       grow_bounds( box.x, pose.x - range );
+     }
+   
+   if( lefta > -M_PI/2.0 && righta < -M_PI/2.0 )
+     {       
+       grow_bounds( box.y, pose.y - range );
+     }
+
+}
+
+void Home::UpdatePucks()
+{
+  std::vector<Puck*> doomed;
+  
+  // decrement puck lifetimes and compile a vector of pucks that have
+  // timed out
+  FOR_EACH( p, pucks )
+    {
+      if( --(*p)->lifetime == 0 ) 
+	doomed.push_back( *p );
+    }
+  
+  // we score 1 point for each puck that timed out here
+  score += doomed.size();
+  
+  FOR_EACH( p, doomed )
+    (*p)->Replace();
 }
 
 void Robot::UpdateAll()
 {
   // if we've done enough updates, exit the program
   if( updates_max > 0 && updates > updates_max )
-	 exit(1);
+    exit(1);
   
   if( ! Robot::paused )
-		{
-		  // not safe to do in parallel
-		  FOR_EACH( r, population )
-			 (*r)->UpdatePose();
+    {
+//       FOR_EACH( r, homes )
+//       	(*r)->UpdatePucks();
+
+      // not safe to do in parallel
+      FOR_EACH( r, population )
+	(*r)->UpdatePose();
 		  
-		  // these calls could be done in parallel
-		  FOR_EACH( r, population )
-			 (*r)->UpdateSensors();
+      // these calls could be done in parallel
+      FOR_EACH( r, population )
+	(*r)->UpdateSensors();
 		  
-		  // not necessarily safe to do in parallel
-		  FOR_EACH( r, population )
-			 (*r)->Controller();
-		}
+      // not necessarily safe to do in parallel
+      FOR_EACH( r, population )
+	(*r)->Controller();
+    }
 
   ++updates;
   
   // possibly snooze to save CPU and slow things down 
   if( sleep_msec > 0 )
-		usleep( sleep_msec * 1e3 );
+    usleep( sleep_msec * 1e3 );
 }
 
 void Robot::Run()
@@ -395,9 +473,9 @@ double Robot::WrapDistance( double d )
   const double halfworld( worldsize * 0.5 );
   
   if( d > halfworld )
-	 d -= worldsize;
+    d -= worldsize;
   else if( d < -halfworld )
-	 d += worldsize;
+    d += worldsize;
 
   return d;
 }
@@ -405,15 +483,83 @@ double Robot::WrapDistance( double d )
 /** Normalize a length to within 0 to worldsize. */
 double Robot::DistanceNormalize( double d )
 {
-	while( d < 0 ) d += worldsize;
-	while( d > worldsize ) d -= worldsize;
-	return d; 
+  while( d < 0 ) d += worldsize;
+  while( d > worldsize ) d -= worldsize;
+  return d; 
 } 
 
 /** Normalize an angle to within +/_ M_PI. */
 double Robot::AngleNormalize( double a )
 {
-	while( a < -M_PI ) a += 2.0*M_PI;
-	while( a >  M_PI ) a -= 2.0*M_PI;	 
-	return a;
+  while( a < -M_PI ) a += 2.0*M_PI;
+  while( a >  M_PI ) a -= 2.0*M_PI;	 
+  return a;
 }	 
+
+
+Puck::Puck( double x, double y ) 
+  : held(true), home(NULL), index(0), lifetime(100), x(x), y(y) 
+{
+  Robot::matrix[Robot::Cell(x,y)].pucks.insert(this);  
+  Drop();
+}
+
+Puck::~Puck()
+{
+  Robot::matrix[Robot::Cell(x,y)].pucks.erase(this);    
+}
+
+void Puck::Replace()
+{
+  Robot::matrix[Robot::Cell(x,y)].pucks.erase(this);    
+
+  x = drand48() * Robot::worldsize;
+  y = drand48() * Robot::worldsize;
+
+  Robot::matrix[Robot::Cell(x,y)].pucks.insert(this);  
+  
+  if( home )
+    {
+      home->pucks.erase(this);
+      home = NULL;
+    }
+  
+  Drop();  
+}
+
+void Puck::Pickup()
+{
+  //printf( "puck %p picked up with home %p\n", this, home );
+
+  assert( held == false );	    
+  held = true;
+  
+  if( home )
+    {
+      home->pucks.erase( this );
+      home = NULL;
+    }
+}
+
+void Puck::Drop()
+{
+  assert( home == NULL );
+  
+  held = false;	     
+  
+  double closest_range( 1e12 ); // huge
+  FOR_EACH( h, Robot::homes )
+    {
+      double range = hypot( (*h)->x-x, (*h)->y-y );
+      if( range < closest_range && range < (*h)->r )
+	{
+	  home = *h;
+	  closest_range = range;
+	}
+    }
+  
+  if( home )
+    home->pucks.insert( this );	     
+  
+  //printf( "puck %p dropped at home %p\n", this, home );
+}

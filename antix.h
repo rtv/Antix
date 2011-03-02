@@ -14,7 +14,7 @@
 #include <assert.h>
 
 #define GRAPHICS 1
-#define DEBUGVIS 0
+#define DEBUGVIS 1
 
 // handy STL iterator macro pair. Use FOR_EACH(I,C){ } to get an iterator I to
 // each item in a collection C.
@@ -28,29 +28,73 @@ namespace Antix
   /** Convert degrees to radians */
   inline double dtor( double d){ return( d * M_PI / 180.0 ); }
   	
-	class Home
-	{
-	public:
-		
-		class Color
-		{
-		public:
-			double r, g, b;
-			
-		Color( double r, double g, double b ) :	r(r), g(g), b(b) {}
-			
-			// get a random color
-			static Color Random()
-			{
-				return Color( drand48(), drand48(), drand48() );
-			}
-			
-		} color; 
-		
-		double x, y, r;
-		
-		Home( const Color& color, double x, double y, double r );
-	};
+  // bounds type - specifies a range of values
+  typedef struct
+  {
+    double min, max;
+  } bounds_t;
+
+  // bounding box type - specifies a 2d range of values
+  typedef struct
+  {
+    bounds_t x, y;
+  } bbox_t;
+  
+  class Home;
+
+  class Puck
+  {
+  public:
+    bool held; // true iff carried by a robot 
+    Home* home;
+    unsigned int index; // the matrix cell that currently contains this puck
+    unsigned int lifetime;
+    double x,y; // location
+    //unsigned int count; // number of puck units here 
+    
+    /** constructor places a puck at specified pose */
+    Puck( double x, double y ); 
+    ~Puck();
+    
+    void Replace();
+
+    //Puck() 
+    //:  held(false), index(0), lifetime(10), x(0.0), y(0.0)//, count(1) 
+	   // {  /* do nothing */ }		 
+    
+    void Pickup();
+    void Drop();
+  };		 
+  
+  class Home
+  {
+  public:
+    
+    class Color
+    {
+    public:
+      double r, g, b;
+      
+    Color( double r, double g, double b ) :	r(r), g(g), b(b) {}
+      
+      // get a random color
+      static Color Random()
+      {
+	return Color( drand48(), drand48(), drand48() );
+      }
+      
+    } color; 
+    
+    std::set<Puck*> pucks;
+
+    unsigned int score;
+
+    double x, y, r;
+
+    Home( const Color& color, double x, double y, double r );
+
+    void UpdatePucks();
+  };
 	
   class Robot
   {
@@ -98,7 +142,6 @@ namespace Antix
 	 static unsigned int gui_interval; // number of milliseconds between window redraws
 	 static Robot* first;
 	 
-	 class Puck;
 
 	 class MatrixCell
 	 {
@@ -127,7 +170,10 @@ namespace Antix
 	 // render the robot in OpenGL
 	 void Draw();	 
 #endif
-	 
+	
+	 bbox_t sensor_bbox; 
+	 void FovBBox( bbox_t& box );
+
 	 // deliver pucks to this location
 	 Home* home;
 	 
@@ -193,6 +239,12 @@ namespace Antix
 		 return floor( x / d );
 	 }
 	 
+	 static inline int CellNoWrap( double x )
+	 {
+	   const double d = Robot::worldsize / (double)Robot::matrixwidth;	      		
+	   return floor( x / d );
+	 }
+	 
 	 static inline unsigned int CellWrap( int x )
 	 {
 		while( x >= (int)matrixwidth ) // wraparound
@@ -219,22 +271,7 @@ namespace Antix
 		neighbor_cells.insert( index );
 #endif
 	 }
-
-	public: class Puck
-	 {
-	 public:
-		 bool held;		 
-		 unsigned int index;
- 		 double x,y;
-		 
-		 /** constructor places a puck at specified pose */
-		 //Puck( double x, double y ) : x(x), y(y), held(false) {}
-		 
-	 Puck() 
-		:  held(false), index(0),x(0.0), y(0.0) 
-			{  /* do nothing */ }		 
-	 };		 
-	 
+	 	 
 	 static std::vector<Puck> pucks;
 
 	 class SeePuck
@@ -274,7 +311,7 @@ namespace Antix
 	 bool Drop();
 	 
 	 /** Returns true if we are currently holding a puck. */
-	 bool Holding();
+	 bool Holding() const;
 	  
 	 /** pure virtual - subclasses must implement this method  */
 	 virtual void Controller() = 0;
@@ -288,4 +325,55 @@ namespace Antix
 	 // update
 	 void UpdateSensors();
   };	
+
+  // fast approximation to atan2
+  inline double fast_atan2( double y, double x )
+  {
+    const double piD2( M_PI/2.0 );
+    double atan;
+    double z = y/x;
+    
+    if ( x == 0.0 ){
+      if ( y > 0.0 ) return piD2;
+      if ( y == 0.0 ) return 0.0;
+      return -piD2;
+    }
+    
+    if ( fabs( z ) < 1.0 ){
+      atan = z/(1.0 + 0.28*z*z);
+      if ( x < 0.0 ){
+	if ( y < 0.0 ) return atan - M_PI;
+	return atan + M_PI;
+      }
+    }
+    else{
+      atan = piD2 - z/(z*z + 0.28f);
+      if ( y < 0.0f ) return atan - M_PI;
+    }
+    return atan;
+  }
+  
+  inline double fast_sin(double x)
+  {
+    const double B = 4/M_PI;
+    const double C = -4/(M_PI*M_PI);
+    const double P = 0.225;
+    const double y = B * x + C * x * fabs(x);  
+    return(  P * (y * fabs(y) - y) + y );   
+  }
+  
+  inline double fast_cos(double x)
+  {
+    const double B = 4/M_PI;
+    const double C = -4/(M_PI*M_PI);
+    const double P = 0.225;
+    
+    x = x + M_PI/2;
+    if(x > M_PI){   // Original x > M_PI/2
+      x -= 2 * M_PI;   // Wrap: cos(x) = cos(x - 2 M_PI)
+    }
+    
+    double y = B * x + C * x * fabs(x);  //fast, inprecise
+    return( P * (y * fabs(y) - y) + y );  
+  }
 }; // namespace Antix

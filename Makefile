@@ -11,6 +11,7 @@ GLUTFLAGS = -framework OpenGL -framework GLUT
 
 CC = g++
 CXXFLAGS = -g -O3 -Wall $(GLUTFLAGS)
+#CXXFLAGS = -g -Wall $(GLUTFLAGS)
 LIBS =  -g -lm $(GLUTLIBS)
 
 HDR = antix.h controller.h
