@@ -48,9 +48,8 @@ namespace Antix
     bool held; // true iff carried by a robot 
     Home* home;
     unsigned int index; // the matrix cell that currently contains this puck
-    unsigned int lifetime;
+    uint64_t delivery_time;
     double x,y; // location
-    //unsigned int count; // number of puck units here 
     
     /** constructor places a puck at specified pose */
     Puck( double x, double y ); 
@@ -69,6 +68,7 @@ namespace Antix
   class Home
   {
   public:
+    unsigned int id;
     
     class Color
     {
@@ -84,14 +84,15 @@ namespace Antix
       }
       
     } color; 
+
     
-    std::set<Puck*> pucks;
+    std::list<Puck*> pucks;
 
     unsigned int score;
 
     double x, y, r;
 
-    Home( const Color& color, double x, double y, double r );
+    Home( unsigned int id, const Color& color, double x, double y, double r );
 
     void UpdatePucks();
   };

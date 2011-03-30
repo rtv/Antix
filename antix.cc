@@ -11,6 +11,7 @@
 #include "antix.h"
 using namespace Antix;
 
+static uint64_t score_time( 200 );
 
 // initialize static members
 bool Robot::paused( false );
@@ -53,8 +54,8 @@ const char usage[] = "Antix understands these command line arguments:\n"
   "  -w <int> : sets the initial size of the window, in pixels.\n"
   "  -z <int> : sets the number of milliseconds to sleep between updates.\n";
 
-Home::Home( const Color& color, double x, double y, double r ) 
-  : color(color), pucks(), score(0), x(x), y(y), r(r) 
+Home::Home( unsigned int id, const Color& color, double x, double y, double r ) 
+  : id(id), color(color), pucks(), score(0), x(x), y(y), r(r) 
 {
   Robot::homes.push_back(this);
 }
@@ -392,21 +393,14 @@ void Robot::FovBBox( bbox_t& box )
 
 void Home::UpdatePucks()
 {
-  std::vector<Puck*> doomed;
-  
-  // decrement puck lifetimes and compile a vector of pucks that have
-  // timed out
-  FOR_EACH( p, pucks )
-    {
-      if( --(*p)->lifetime == 0 ) 
-	doomed.push_back( *p );
-    }
-  
   // we score 1 point for each puck that timed out here
-  score += doomed.size();
-  
-  FOR_EACH( p, doomed )
-    (*p)->Replace();
+  while( pucks.size() && (Robot::updates - (*pucks.begin())->delivery_time > score_time) )
+    {
+      (*pucks.begin())->Replace();
+      score++;
+      
+      // printf( "%llu home: %d score: %d\n", Robot::updates, id, score );
+    }
 }
 
 void Robot::UpdateAll()
@@ -417,8 +411,8 @@ void Robot::UpdateAll()
   
   if( ! Robot::paused )
     {
-//       FOR_EACH( r, homes )
-//       	(*r)->UpdatePucks();
+      FOR_EACH( r, homes )
+       	(*r)->UpdatePucks();
 
       // not safe to do in parallel
       FOR_EACH( r, population )
@@ -481,7 +475,7 @@ double Robot::AngleNormalize( double a )
 
 
 Puck::Puck( double x, double y ) 
-  : held(true), home(NULL), index(0), lifetime(100), x(x), y(y) 
+  : held(true), home(NULL), index(0), delivery_time(0), x(x), y(y) 
 {
   Robot::matrix[Robot::Cell(x,y)].pucks.push_back(this);  
   Drop();
@@ -503,7 +497,7 @@ void Puck::Replace()
   
   if( home )
     {
-      home->pucks.erase(this);
+      EraseAll( this, home->pucks );
       home = NULL;
     }
   
@@ -519,7 +513,7 @@ void Puck::Pickup()
   
   if( home )
     {
-      home->pucks.erase( this );
+      EraseAll( this, home->pucks );
       home = NULL;
     }
 }
@@ -542,7 +536,11 @@ void Puck::Drop()
     }
   
   if( home )
-    home->pucks.insert( this );	     
-  
+    {
+      // record the time of delivery
+      delivery_time = Robot::updates;
+      home->pucks.push_back( this );	     
+    }
+
   //printf( "puck %p dropped at home %p\n", this, home );
 }

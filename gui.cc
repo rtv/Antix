@@ -4,6 +4,7 @@ using namespace Antix;
 
 #if GRAPHICS
 #include <GLUT/glut.h> // OS X users need <glut/glut.h> instead
+#include "gltzpr/zpr.h" // zoom-pan-rotate GLUT utility
 
 int Robot::winsize( 700 );
 
@@ -76,6 +77,17 @@ void GlDrawCircle( double x, double y, double r, double count )
 }
 
 
+void RenderString(float x, float y, char* str )
+{  
+  glPushMatrix();
+
+  glRasterPos2f(x, y);
+  for( char* c = str; *c; c++ )
+      glutBitmapCharacter( GLUT_BITMAP_TIMES_ROMAN_24, *c );
+  
+  glPopMatrix();
+}
+
 //
 // Robot static member methods ---------------------------------------------
 
@@ -106,6 +118,7 @@ void Robot::InitGraphics( int argc, char* argv[] )
   glLoadIdentity();
   glScalef( zoom, zoom, 1 ); 
   glPointSize( 2.0 );
+  //zprInit(); // zoom & pan utilty
 }
 
 void Robot::UpdateGui()
@@ -177,11 +190,35 @@ void Robot::DrawAll()
 		 h->color.g,
 		 h->color.b );
 			
+      char buf[64];
+      snprintf( buf, 63, "%lu", (long unsigned int) h->score );
+
       GlDrawCircle( h->x, h->y, h->r, 12 );
-      GlDrawCircle( h->x+worldsize, h->y, h->r, 12 );
-      GlDrawCircle( h->x-worldsize, h->y, h->r, 12 );
-      GlDrawCircle( h->x, h->y+worldsize, h->r, 12 );
-      GlDrawCircle( h->x, h->y-worldsize, h->r, 12 );
+      RenderString( h->x, h->y+h->r, buf );
+      
+      if( h->x - h->r < 0 )
+	{
+	  GlDrawCircle( h->x+worldsize, h->y, h->r, 12 );
+	  RenderString( h->x+worldsize, h->y+h->r, buf );
+	}
+
+      if( h->x + h->r > worldsize )
+	{
+	  GlDrawCircle( h->x-worldsize, h->y, h->r, 12 );
+	  RenderString( h->x-worldsize, h->y+h->r, buf );
+	}
+      
+      if( h->y - h->r < 0 )
+	{
+	  GlDrawCircle( h->x, h->y+worldsize, h->r, 12 );
+	  RenderString( h->x, h->y+h->r+worldsize, buf );
+	}
+      
+      if( h->y + h->r > worldsize )
+	{
+	  GlDrawCircle( h->x, h->y-worldsize, h->r, 12 );
+	  RenderString( h->x, h->y+h->r-worldsize, buf );
+	}
     }
 	
   //glColor3f( 1,1,1 ); // green

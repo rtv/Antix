@@ -21,7 +21,8 @@ int main( int argc, char* argv[] )
   // create each home, and each robot within each home
   for( unsigned int i=0; i<Robot::home_count; i++ )
     {
-      Home* h( new Home( i < color_count ? colors[i] : Home::Color::Random(), 
+      Home* h( new Home( i,
+			 i < color_count ? colors[i] : Home::Color::Random(), 
 			 i ? drand48() * Robot::worldsize : Robot::worldsize/2.0,
 			 i ? drand48() * Robot::worldsize : Robot::worldsize/2.0,													
 			 0.1 ));
