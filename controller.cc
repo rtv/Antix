@@ -8,6 +8,28 @@
 #include "controller.h"
 using namespace Antix;
 
+
+Forager::Forager( Antix::Home* h ) 
+  : Robot( h, Pose() ), 
+    lastx(home->x), // initial search location is close to my home
+    lasty(home->y)
+{
+  double delta( 4.0 );
+  DistanceNormalize( pose.x = delta * drand48() -delta/2.0 + home->x );
+  DistanceNormalize( pose.y = delta * drand48() -delta/2.0 + home->y );
+  
+//   static bool startup( true );
+
+//   if( startup )
+//     {
+//       RVOsim->setAgentDefaults(0.1,10,10,2,1.3*Robot::radius, 0.005);
+//       RVOsim->setTimeStep(1);
+//       startup = false;
+//     }
+
+//   this->RVOid = Robot::RVOsim->addAgent(RVO::Vector2(pose.x,pose.y));  
+}
+
 void Forager::Controller()
 {		
   double heading_error(0.0);

@@ -8,10 +8,12 @@
 #include <assert.h>
 #include <unistd.h>
 #include <algorithm>
+#include <sys/time.h> // for gettimeofday(3)
 #include "antix.h"
 using namespace Antix;
 
 static uint64_t score_time( 200 );
+static double start_seconds(0);
 
 // initialize static members
 bool Robot::paused( false );
@@ -160,6 +162,11 @@ void Robot::Init( int argc, char** argv )
 #if GRAPHICS
   InitGraphics( argc, argv );
 #endif // GRAPHICS
+  
+  // record the starting time to measure how long we have run for
+  struct timeval tv;
+  gettimeofday( &tv, NULL );
+  start_seconds = tv.tv_sec + tv.tv_usec/1e6;
 }
 
 void Robot::TestRobotsInCell( const MatrixCell& cell )
@@ -425,12 +432,25 @@ void Robot::UpdateAll()
       // not necessarily safe to do in parallel
       FOR_EACH( r, population )
 	(*r)->Controller();
-    }
 
-  ++updates;
+      ++updates;
+      
+      static double lastseconds=0;
+      
+      if( updates % 100 == 0 ) // every hundred updates
+	{
+	  static struct timeval tv;
+	  gettimeofday( &tv, NULL );
+	  
+	  double seconds = tv.tv_sec + tv.tv_usec/1e6;
+	  double interval = seconds - lastseconds;
+	  printf( "[%llu] %.2f (%.2f)\n", updates, 100.0/interval, updates/(seconds-start_seconds) );      
+	  lastseconds = seconds;
+	}
+    }
   
   // possibly snooze to save CPU and slow things down 
-  if( sleep_msec > 0 )
+  if( paused || sleep_msec > 0 )
     usleep( sleep_msec * 1e3 );
 }
 
