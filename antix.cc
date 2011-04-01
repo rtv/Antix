@@ -176,7 +176,7 @@ void Robot::TestRobotsInCell( const MatrixCell& cell )
 
   FOR_EACH( it, cell.robots )
     {
-      Robot* other = *it;
+      Robot* other( *it );
       
       // discard if it's the same robot
       if( other == this )
@@ -198,7 +198,7 @@ void Robot::TestRobotsInCell( const MatrixCell& cell )
 	continue; // out of range
       
       // test distance squared
-      const double dsq = dx*dx + dy*dy;
+      const double dsq( dx*dx + dy*dy );
       if( dsq > rngsqrd ) 
 	continue; 
 			
@@ -224,7 +224,7 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
   
   FOR_EACH( it, cell.pucks )
     {      
-      Puck* puck = *it;
+      Puck* puck( *it );
 		
 #if DEBUGVIS
       neighbor_pucks.push_back( puck );
@@ -240,7 +240,7 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
       if( fabs(dy) > Robot::range )
 	continue; // out of range
 		
-      const double dsq = dx*dx + dy*dy;
+      const double dsq( dx*dx + dy*dy );
       if( dsq > rngsqrd ) 
 	continue; 
 			
@@ -278,7 +278,15 @@ void Robot::UpdateSensors()
   
   for( int x(CellNoWrap(sensor_bbox.x.min)); x<=lastx; x++ )
     for( int y(CellNoWrap(sensor_bbox.y.min)); y<=lasty; y++ )
-      UpdateSensorsCell( x,y );
+      {
+	unsigned int index( CellWrap(x) + ( CellWrap(y) * matrixwidth ));
+	TestRobotsInCell( matrix[index] );
+	TestPucksInCell( matrix[index] );
+	
+#if DEBUGVIS		
+	neighbor_cells.insert( index );
+#endif
+      }
 }
 
 bool Robot::Pickup()
@@ -320,15 +328,15 @@ bool Robot::Drop()
 void Robot::UpdatePose()
 {
   // move according to the current speed 
-  double dx = speed.v * fast_cos(pose.a);
-  double dy = speed.v * fast_sin(pose.a);; 
-  double da = speed.w;
+  const double dx( speed.v * fast_cos(pose.a) );
+  const double dy( speed.v * fast_sin(pose.a) ); 
+  const double da( speed.w );
   
   pose.x = DistanceNormalize( pose.x + dx );
   pose.y = DistanceNormalize( pose.y + dy );
   pose.a = AngleNormalize( pose.a + da );
     
-  unsigned int newindex = Cell( pose.x, pose.y );
+  const unsigned int newindex( Cell( pose.x, pose.y ) );
  
   // if we're carrying a puck, update it's position
   if( puck_held )
@@ -418,6 +426,7 @@ void Robot::UpdateAll()
   
   if( ! Robot::paused )
     {
+      // not safe to do in parallel
       FOR_EACH( r, homes )
        	(*r)->UpdatePucks();
 
@@ -437,14 +446,14 @@ void Robot::UpdateAll()
       
       static double lastseconds=0;
       
-      if( updates % 100 == 0 ) // every hundred updates
+      if( updates % 10 == 0 ) // every hundred updates
 	{
 	  static struct timeval tv;
 	  gettimeofday( &tv, NULL );
 	  
 	  double seconds = tv.tv_sec + tv.tv_usec/1e6;
 	  double interval = seconds - lastseconds;
-	  printf( "[%llu] %.2f (%.2f)\n", updates, 100.0/interval, updates/(seconds-start_seconds) );      
+	  printf( "[%llu] %.2f (%.2f)\n", updates, 10.0/interval, updates/(seconds-start_seconds) );      
 	  lastseconds = seconds;
 	}
     }

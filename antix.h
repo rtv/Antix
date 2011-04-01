@@ -261,18 +261,7 @@ namespace Antix
 	 {
 		return (Cell(x) + (Cell(y) * Robot::matrixwidth) );		 
 	 }
-	 
-	 inline void UpdateSensorsCell( unsigned int x, unsigned int y )
-	 {
-		unsigned int index( CellWrap(x) + ( CellWrap(y) * matrixwidth ));
-		TestRobotsInCell( matrix[index] );
-		TestPucksInCell( matrix[index] );
-		
-#if DEBUGVIS		
-		neighbor_cells.insert( index );
-#endif
-	 }
-	 	 
+	 	 	 
 	 static std::vector<Puck> pucks;
 
 	 class SeePuck

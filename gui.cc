@@ -219,6 +219,8 @@ void Robot::DrawAll()
 	  GlDrawCircle( h->x, h->y-worldsize, h->r, 12 );
 	  RenderString( h->x, h->y+h->r-worldsize, buf );
 	}
+      
+      // printf( "home %u pucks %u\n", h->id, (unsigned int)h->pucks.size() ); 
     }
 	
   //glColor3f( 1,1,1 ); // green
