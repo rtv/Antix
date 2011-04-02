@@ -15,6 +15,11 @@ using namespace Antix;
 static uint64_t score_time( 200 );
 static double start_seconds(0);
 
+static pthread_mutex_t sync_mutex;
+static pthread_cond_t cond_start;
+static pthread_cond_t cond_done;
+static unsigned int worker_count;
+
 // initialize static members
 bool Robot::paused( false );
 bool Robot::show_data( false );
@@ -78,6 +83,49 @@ Robot::Robot( Home* home,
   
   if( ! first )
     first = this;
+}
+
+// wrapper requred to work around C++'s inability to use methods as callbacks 
+static void PuckWorkerFunc( Robot* r )
+{
+  r->UpdatePuckSensor();
+}
+
+static void RobotWorkerFunc( Robot* r )
+{
+  r->UpdateRobotSensor();
+}
+
+void* WorkerThreadEntry( void (*func)(Robot*) )
+{
+  pthread_mutex_lock(&sync_mutex);  
+  
+  // wait for signal
+  while(true)
+    {
+      // wait for the main thread to wake us up
+      //printf( "worker %p sleeping\n", func );
+      pthread_cond_wait( &cond_start, &sync_mutex );
+      //printf( "worker %p waking\n", func );
+      pthread_mutex_unlock( &sync_mutex );
+      
+      // call func for every robot 
+      FOR_EACH( it, Robot::population )
+	(*func)(*it);
+      
+      // signal done
+      pthread_mutex_lock( &sync_mutex );	  
+      
+      // decrement the thread count. if we're the last thread done, signal the main thread
+      if( --(worker_count) == 0 )
+	{
+	  //printf( "last worker (%p) signalling main thread\n", func );
+	  pthread_cond_signal( &cond_done );
+	}
+      // keep lock going round the loop
+    }
+
+  return NULL; // compiler satisfaction
 }
 
 void Robot::Init( int argc, char** argv )
@@ -162,6 +210,15 @@ void Robot::Init( int argc, char** argv )
 #if GRAPHICS
   InitGraphics( argc, argv );
 #endif // GRAPHICS
+  
+  pthread_mutex_init( &sync_mutex, NULL );
+  pthread_cond_init( &cond_start, NULL );
+  pthread_cond_init( &cond_done, NULL );
+  
+  // enter worker threads - they do nothing until signalled in UpdateAll()
+  pthread_t pt;
+  pthread_create( &pt, NULL, (void*(*)(void*))WorkerThreadEntry, (void*)RobotWorkerFunc );
+  pthread_create( &pt, NULL, (void*(*)(void*))WorkerThreadEntry, (void*)PuckWorkerFunc );
   
   // record the starting time to measure how long we have run for
   struct timeval tv;
@@ -258,6 +315,45 @@ void Robot::TestPucksInCell( const MatrixCell& cell )
     }		
 }
 
+// void SensePuckThreadEntry( std::vector<Robot*> &robots )
+// {
+//   // wait for signal
+
+//   FOR_EACH( it, robots )
+//     (*it)->UpdateRobotSensor();
+  
+//   // signal done
+// }
+
+void Robot::UpdateRobotSensor()
+{
+  see_robots.clear();
+  
+  const int lastx( CellNoWrap(sensor_bbox.x.max) );
+  const int lasty( CellNoWrap(sensor_bbox.y.max) );
+  
+  for( int x(CellNoWrap(sensor_bbox.x.min)); x<=lastx; x++ )
+    for( int y(CellNoWrap(sensor_bbox.y.min)); y<=lasty; y++ )
+      TestRobotsInCell( matrix[ CellWrap(x) + ( CellWrap(y) * matrixwidth )] );
+}
+
+void Robot::UpdatePuckSensor()
+{
+  see_pucks.clear();
+  
+  // note: the following two large sensing operations could safely be
+  // done in parallel since they do not modify any common data
+
+  const int lastx( CellNoWrap(sensor_bbox.x.max) );
+  const int lasty( CellNoWrap(sensor_bbox.y.max) );
+  
+  for( int x(CellNoWrap(sensor_bbox.x.min)); x<=lastx; x++ )
+    for( int y(CellNoWrap(sensor_bbox.y.min)); y<=lasty; y++ )
+      TestPucksInCell( matrix[ CellWrap(x) + ( CellWrap(y) * matrixwidth ) ] );
+}
+
+
+/*
 void Robot::UpdateSensors()
 {
   see_robots.clear();
@@ -288,6 +384,7 @@ void Robot::UpdateSensors()
 #endif
       }
 }
+*/
 
 bool Robot::Pickup()
 {
@@ -434,10 +531,26 @@ void Robot::UpdateAll()
       FOR_EACH( r, population )
 	(*r)->UpdatePose();
 		  
-      // these calls could be done in parallel
-      FOR_EACH( r, population )
-	(*r)->UpdateSensors();
-		  
+      // unblock the workers - they are waiting on this condition var
+      pthread_mutex_lock( &sync_mutex );
+      worker_count = 2;
+      //puts( "main thread signalling workers" );
+      pthread_cond_broadcast( &cond_start );
+      pthread_mutex_unlock( &sync_mutex );
+      
+      // wait for all the last update job to complete - it will
+      // signal the worker_threads_done condition var
+      pthread_mutex_lock( &sync_mutex );
+      while( worker_count  )
+	{
+	  //puts( "main thread waiting for workers to finish" );
+	  pthread_cond_wait( &cond_done, &sync_mutex );
+	}
+      pthread_mutex_unlock( &sync_mutex );		 
+      //puts( "main thread awakes" );
+
+      // wait for worker threads to complete
+	  
       // not necessarily safe to do in parallel
       FOR_EACH( r, population )
 	(*r)->Controller();

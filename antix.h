@@ -313,7 +313,10 @@ namespace Antix
 	 void UpdatePose();
 	 
 	 // update
-	 void UpdateSensors();
+	 //void UpdateSensors();
+  public:
+	 void UpdateRobotSensor();
+	 void UpdatePuckSensor();
   };	
 
   // fast approximation to atan2
