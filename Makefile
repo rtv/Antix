@@ -15,7 +15,7 @@ CXXFLAGS = -g -O3 -Wall $(GLUTFLAGS)
 LIBS =  -g -lm $(GLUTLIBS)
 
 HDR = antix.h controller.h
-SRC = antix.cc controller.cc gui.cc main.cc gltzpr/zpr.c
+SRC = antix.cc controller.cc gui.cc main.cc
 
 all: antix
 
